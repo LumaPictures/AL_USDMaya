@@ -21,6 +21,11 @@ target_include_directories(testMayaSchemas
 target_link_libraries(testMayaSchemas
     ${SCHEMAS_PACKAGE}
     ${GTEST_LIBRARIES}
+    ${Boost_PYTHON_LIBRARY}
+    arch
+    sdf
+    tf
+    vt
     )
 
 install(TARGETS testMayaSchemas DESTINATION bin)

@@ -2,21 +2,6 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(AL_USDMaya)
 
-# AL_USDMAYA uses pxrConfig.cmake exported targets
-# Grab USD_CONFIG_FILE either as a cmake define or an environment variable
-if(NOT USD_CONFIG_FILE)
-    if(NOT DEFINED ENV{USD_CONFIG_FILE})
-        message(FATAL_ERROR "Please set USD_CONFIG_FILE to the path to pxrConfig.cmake")
-    else()
-        set(USD_CONFIG_FILE $ENV{USD_CONFIG_FILE})
-    endif()
-endif()
-if(NOT EXISTS ${USD_CONFIG_FILE})
-    message( FATAL_ERROR "pxrConfig.cmake is needed, please set USD_CONFIG_FILE to a valid path")
-else()
-    include(${USD_CONFIG_FILE})
-endif()
-
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake/modules")
 
 #set cmake modules - ";" separated not ":"!
@@ -39,6 +24,7 @@ add_definitions(${_PXR_CXX_DEFINITIONS})
 
 find_package(Maya REQUIRED)
 include_directories(${MAYA_INCLUDE_DIRS})
+link_directories(${MAYA_LIBRARY_DIR})
 
 if(${MAYA_API_VERSION} STRGREATER 2017)
     find_package(Qt5Gui REQUIRED)
@@ -46,15 +32,25 @@ else()
     find_package(Qt4 REQUIRED QtGui)
 endif()
 
-include_directories(${PXR_INCLUDE_DIRS})
+find_package(USD REQUIRED)
+include_directories(${USD_INCLUDE_DIR})
+link_directories(${USD_LIBRARY_DIR})
 
 # FindBoost is particularly buggy, and doesn't like custom boost locations.
 # Adding specific components forces calls to _Boost_find_library, which
 # is the rationale for listing them here.
+set(Boost_USE_STATIC_LIBS OFF)
 find_package(Boost COMPONENTS
                 python
                 REQUIRED
 )
+include_directories(${Boost_INCLUDE_DIRS})
+
+find_package(PythonLibs REQUIRED)
+include_directories(SYSTEM ${PYTHON_INCLUDE_DIRS})
+
+find_package(GLEW REQUIRED)
+include_directories(${GLEW_INCLUDE_DIR})
 
 set(CMAKE_CXX_FLAGS
     -std=c++11

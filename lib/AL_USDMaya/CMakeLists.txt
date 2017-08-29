@@ -182,7 +182,6 @@ add_definitions(-DAL_USDMAYA_LOCATION_NAME="${AL_USDMAYA_LOCATION_NAME}")
 target_include_directories(
     ${LIBRARY_NAME}
     PUBLIC
-    ${PXR_INCLUDE_DIRS}
     ${MAYA_INCLUDE_DIRS}
 )
 

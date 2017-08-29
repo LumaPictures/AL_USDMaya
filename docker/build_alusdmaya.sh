@@ -24,7 +24,7 @@ cd $TMP_DIR &&\
             -DBOOST_ROOT=$BUILD_DIR \
             -DMAYA_LOCATION=$MAYA_LOCATION \
             -DGTEST_ROOT=$BUILD_DIR \
-            -DUSD_CONFIG_FILE=$BUILD_DIR/usd/${USD_VERSION}/pxrConfig.cmake \
+            -DUSD_ROOT=$BUILD_DIR \
             -DCMAKE_PREFIX_PATH=$MAYA_LOCATION/lib/cmake \
             ..
       make -j ${BUILD_PROCS} install

@@ -32,7 +32,7 @@ cmake \
       -DCMAKE_MODULE_PATH='/paths/to/folders/which/have/cmake/files' \
       -DBOOST_ROOT='/path/to/boost' \
       -DMAYA_LOCATION='/path/to/maya' \
-      -DUSD_CONFIG_FILE='/path/to/pxrConfig.cmake'\
+      -DUSD_ROOT='/path/to/usd/root/dir'\
       -DGTEST_ROOT='/path/to/googletest'\
       -DCMAKE_PREFIX_PATH='/path/to/maya/lib/cmake'
       ..
