@@ -17,7 +17,7 @@
 #if MAYA_API_VERSION < 201700
 #include <QtGui/QApplication>
 #else
-#include <QGuiApplication>
+#include <QtGui/QGuiApplication>
 #endif
 
 #include "AL/usdmaya/DebugCodes.h"
