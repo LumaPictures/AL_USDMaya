@@ -38,6 +38,7 @@
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
+#include "usdMaya/xformStack.h"
 #include "AL/usdmaya/utils/AttributeType.h"
 #include "AL/usdmaya/utils/DgNodeHelper.h"
 #include "AL/usdmaya/utils/Utils.h"
@@ -181,64 +182,64 @@ MEulerRotation::RotationOrder convertRotationOrder(UsdGeomXformOp::Type type)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-bool TransformTranslator::getAnimationVariables(TransformOperation opIt, MObject &obj, double &conversionFactor)
+bool TransformTranslator::getAnimationVariables(const UsdMayaXformOpClassification& opIt, MObjectArray& attributes, double &conversionFactor)
 {
-  switch(opIt)
+  attributes.clear();
+  const TfToken& opName = opIt.GetName();
+  if (opName == UsdMayaXformStackTokens->translate)
   {
-    case kTranslate:
-    {
-      obj = m_translation;
-      break;
-    }
-    case kRotatePivotTranslate:
-    {
-      obj = m_rotatePivotTranslate;
-      break;
-    }
-    case kRotatePivot:
-    {
-      obj = m_rotatePivot;
-      break;
-    }
-    case kRotate:
-    {
-      obj = m_rotation;
-      MAngle one(1.0, MAngle::kDegrees);
-      conversionFactor = one.as(MAngle::kRadians);
-      break;
-    }
-    case kRotateAxis:
-    {
-      obj = m_rotateAxis;
-      MAngle one(1.0, MAngle::kDegrees);
-      conversionFactor = one.as(MAngle::kRadians);
-      break;
-    }
-    case kScalePivotTranslate:
-    {
-      obj = m_scalePivotTranslate;
-      break;
-    }
-    case kScalePivot:
-    {
-      obj = m_scalePivot;
-      break;
-    }
-    case kShear:
-    {
-      obj = m_shear;
-      break;
-    }
-    case kScale:
-    {
-      obj = m_scale;
-      break;
-    }
-    default:
-    {
-      std::cerr << "TransformTranslator::copyAnimated - Unknown transform operation" << std::endl;
-      return 1;
-    }
+    attributes.append(m_translation);
+  }
+  else if (opName == UsdMayaXformStackTokens->pivotTranslate)
+  {
+    attributes.append(m_rotatePivotTranslate);
+    attributes.append(m_scalePivotTranslate);
+  }
+  else if (opName == UsdMayaXformStackTokens->pivot)
+  {
+    attributes.append(m_rotatePivot);
+    attributes.append(m_scalePivot);
+  }
+  else if (opName == UsdMayaXformStackTokens->rotatePivotTranslate)
+  {
+    attributes.append(m_rotatePivotTranslate);
+  }
+  else if (opName == UsdMayaXformStackTokens->rotatePivot)
+  {
+    attributes.append(m_rotatePivot);
+  }
+  else if (opName == UsdMayaXformStackTokens->rotate)
+  {
+    attributes.append(m_rotation);
+    MAngle one(1.0, MAngle::kDegrees);
+    conversionFactor = one.as(MAngle::kRadians);
+  }
+  else if (opName == UsdMayaXformStackTokens->rotateAxis)
+  {
+    attributes.append(m_rotateAxis);
+    MAngle one(1.0, MAngle::kDegrees);
+    conversionFactor = one.as(MAngle::kRadians);
+  }
+  else if (opName == UsdMayaXformStackTokens->scalePivotTranslate)
+  {
+    attributes.append(m_scalePivotTranslate);
+  }
+  else if (opName == UsdMayaXformStackTokens->scalePivot)
+  {
+    attributes.append(m_scalePivot);
+  }
+  else if (opName == UsdMayaXformStackTokens->shear)
+  {
+    attributes.append(m_shear);
+  }
+  else if (opName == UsdMayaXformStackTokens->scale)
+  {
+    attributes.append(m_scale);
+  }
+  else
+  {
+    std::cerr << "TransformTranslator::copyAnimated - Unknown transform operation: " << opName.GetText() << std::endl;
+    return 1;
   }
 
   return 0;
@@ -255,14 +256,22 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
   const UsdGeomXform xformSchema(from);
   bool resetsXformStack = false;
   std::vector<UsdGeomXformOp> xformops = xformSchema.GetOrderedXformOps(&resetsXformStack);
-  std::vector<TransformOperation> orderedOps(xformops.size());
 
-  if(matchesMayaProfile(xformops.begin(), xformops.end(), orderedOps.begin()))
+  UsdMayaXformStack::OpClassList orderedOps = \
+      UsdMayaXformStack::FirstMatchingSubstack(
+          {
+              &UsdMayaXformStack::MayaStack(),
+              &UsdMayaXformStack::CommonStack()
+          },
+          xformops);
+
+  if(!orderedOps.empty())
   {
     auto opIt = orderedOps.begin();
     for(std::vector<UsdGeomXformOp>::const_iterator it = xformops.begin(), e = xformops.end(); it != e; ++it, ++opIt)
     {
       const UsdGeomXformOp& op = *it;
+      const UsdMayaXformOpClassification& opClass = *opIt;
       const SdfValueTypeName vtn = op.GetTypeName();
 
       utils::UsdDataType attr_type = AL::usdmaya::utils::getAttributeType(vtn);
@@ -272,58 +281,60 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
       {
         if(attr_type == utils::UsdDataType::kVec3f || attr_type == utils::UsdDataType::kVec3d)
         {
-          MObject obj;
+          MObjectArray attrObjs;
           double conversionFactor = 1.0;
-          getAnimationVariables(*opIt, obj, conversionFactor);
+          getAnimationVariables(opClass, attrObjs, conversionFactor);
 
-          if (obj.isNull())
+          for(size_t attrI = 0; attrI < attrObjs.length(); ++attrI)
           {
-            continue;
-          }
+            MObject& obj = attrObjs[attrI];
+            if (obj.isNull())
+            {
+              continue;
+            }
 
-          if (*opIt == kRotate)
-          {
-            // Set the rotate order
-            AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
-          }
+            const TfToken& opName = opClass.GetName();
+            if (opName == UsdMayaXformStackTokens->rotate)
+            {
+              // Set the rotate order
+              MFnTransform trans(to);
+              AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
+            }
 
-          if (attr_type == utils::UsdDataType::kVec3f)
-          {
-              AL_MAYA_CHECK_ERROR2(setVec3Anim<GfVec3f>(to, obj, op, conversionFactor), xformError);
-          }
-          else
-          {
-            AL_MAYA_CHECK_ERROR2(setVec3Anim<GfVec3d>(to, obj, op, conversionFactor), xformError);
+            if (attr_type == utils::UsdDataType::kVec3f)
+            {
+                AL_MAYA_CHECK_ERROR2(setVec3Anim<GfVec3f>(to, obj, op, conversionFactor), xformError);
+            }
+            else
+            {
+              AL_MAYA_CHECK_ERROR2(setVec3Anim<GfVec3d>(to, obj, op, conversionFactor), xformError);
+            }
           }
         }
         else if(attr_type == utils::UsdDataType::kFloat)
         {
           MObject attr;
-          switch(*opIt)
+          const TfToken& opName = opClass.GetName();
+          if (opName == UsdMayaXformStackTokens->rotate)
           {
-            case kRotate:
+            switch(op.GetOpType())
             {
-              switch(op.GetOpType())
-              {
-                case UsdGeomXformOp::TypeRotateX: attr = m_rotationX; break;
-                case UsdGeomXformOp::TypeRotateY: attr = m_rotationY; break;
-                case UsdGeomXformOp::TypeRotateZ: attr = m_rotationZ; break;
-                default: break;
-              }
-              break;
+              case UsdGeomXformOp::TypeRotateX: attr = m_rotationX; break;
+              case UsdGeomXformOp::TypeRotateY: attr = m_rotationY; break;
+              case UsdGeomXformOp::TypeRotateZ: attr = m_rotationZ; break;
+              default: break;
             }
-            case kRotateAxis:
+          }
+          else if (opName == UsdMayaXformStackTokens->rotateAxis)
+          {
+            switch(op.GetOpType())
             {
-              switch(op.GetOpType())
-              {
-                case UsdGeomXformOp::TypeRotateX: attr = m_rotateAxisX; break;
-                case UsdGeomXformOp::TypeRotateY: attr = m_rotateAxisY; break;
-                case UsdGeomXformOp::TypeRotateZ: attr = m_rotateAxisZ; break;
-                default: break;
-              }
-              break;
+              case UsdGeomXformOp::TypeRotateX: attr = m_rotateAxisX; break;
+              case UsdGeomXformOp::TypeRotateY: attr = m_rotateAxisY; break;
+              case UsdGeomXformOp::TypeRotateZ: attr = m_rotateAxisZ; break;
+              default: break;
             }
-            default: break;
+            break;
           }
 
           if (!attr.isNull())
@@ -333,7 +344,7 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
         }
         else if(attr_type == utils::UsdDataType::kMatrix4d)
         {
-          if(*opIt == kShear)
+          if(opClass.GetName() == UsdMayaXformStackTokens->shear)
           {
             std::cerr << "[TransformTranslator::copyAttributes] Error: Animated shear not currently supported" << std::endl;
           }
@@ -356,29 +367,46 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
           continue;
         }
 
-        switch(*opIt)
+        const TfToken& opName = opClass.GetName();
+        if (opName == UsdMayaXformStackTokens->translate)
         {
-          case kTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_translation, value[0], value[1], value[2]), xformError); break;
-          case kRotatePivotTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivotTranslate, value[0], value[1], value[2]), xformError); break;
-          case kRotatePivot: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivot, value[0], value[1], value[2]), xformError); break;
-          case kRotate:
-          {
-            AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
-            AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotation,
-                    MAngle(value[0], MAngle::kDegrees),
-                    MAngle(value[1], MAngle::kDegrees),
-                    MAngle(value[2], MAngle::kDegrees)), xformError);
-          }
-          break;
-          case kRotateAxis: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotateAxis, value[0] * degToRad, value[1] * degToRad, value[2] * degToRad), xformError); break;
-
-          case kScalePivotTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivotTranslate, value[0], value[1], value[2]), xformError); break;
-          case kScalePivot: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivot, value[0], value[1], value[2]), xformError); break;
-          case kShear: AL_MAYA_CHECK_ERROR2(setVec3(to, m_shear, value[0], value[1], value[2]), xformError); break;
-          case kScale: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scale, value[0], value[1], value[2]), xformError); break;
-
-          default:
-            break;
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_translation, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotatePivotTranslate)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivotTranslate, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotatePivot)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivot, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotate)
+        {
+          AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotation,
+                  MAngle(value[0], MAngle::kDegrees),
+                  MAngle(value[1], MAngle::kDegrees),
+                  MAngle(value[2], MAngle::kDegrees)), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotateAxis)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotateAxis, value[0] * degToRad, value[1] * degToRad, value[2] * degToRad), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scalePivotTranslate)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivotTranslate, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scalePivot)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivot, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->shear)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_shear, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scale)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scale, value[0], value[1], value[2]), xformError);
         }
       }
       else
@@ -392,28 +420,46 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
           continue;
         }
 
-        switch(*opIt)
+        const TfToken& opName = opClass.GetName();
+        if (opName == UsdMayaXformStackTokens->translate)
         {
-          case kTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_translation, value[0], value[1], value[2]), xformError); break;
-          case kRotatePivotTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivotTranslate, value[0], value[1], value[2]), xformError); break;
-          case kRotatePivot: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivot, value[0], value[1], value[2]), xformError); break;
-          case kRotate:
-          {
-            AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
-            AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotation,
-                    MAngle(value[0], MAngle::kDegrees),
-                    MAngle(value[1], MAngle::kDegrees),
-                    MAngle(value[2], MAngle::kDegrees)), xformError);
-          }
-          break;
-          case kRotateAxis: AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotateAxis, value[0] * degToRad, value[1] * degToRad, value[2] * degToRad), xformError); break;
-          case kScalePivotTranslate: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivotTranslate, value[0], value[1], value[2]), xformError); break;
-          case kScalePivot: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivot, value[0], value[1], value[2]), xformError); break;
-          case kShear: AL_MAYA_CHECK_ERROR2(setVec3(to, m_shear, value[0], value[1], value[2]), xformError); break;
-          case kScale: AL_MAYA_CHECK_ERROR2(setVec3(to, m_scale, value[0], value[1], value[2]), xformError); break;
-
-          default:
-            break;
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_translation, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotatePivotTranslate)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivotTranslate, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotatePivot)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotatePivot, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotate)
+        {
+          AL_MAYA_CHECK_ERROR2(setInt32(to, m_rotateOrder, uint32_t(convertRotationOrder(op.GetOpType()))), xformError);
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotation,
+                  MAngle(value[0], MAngle::kDegrees),
+                  MAngle(value[1], MAngle::kDegrees),
+                  MAngle(value[2], MAngle::kDegrees)), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->rotateAxis)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_rotateAxis, value[0] * degToRad, value[1] * degToRad, value[2] * degToRad), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scalePivotTranslate)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivotTranslate, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scalePivot)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scalePivot, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->shear)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_shear, value[0], value[1], value[2]), xformError);
+        }
+        else if (opName == UsdMayaXformStackTokens->scale)
+        {
+          AL_MAYA_CHECK_ERROR2(setVec3(to, m_scale, value[0], value[1], value[2]), xformError);
         }
       }
       else
@@ -427,60 +473,52 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
           continue;
         }
 
-        switch(*opIt)
+        const TfToken& opName = opClass.GetName();
+        if (opName == UsdMayaXformStackTokens->rotate)
         {
-        case kRotate:
+          switch(op.GetOpType())
           {
-            switch(op.GetOpType())
-            {
-            case UsdGeomXformOp::TypeRotateX:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationX, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
+          case UsdGeomXformOp::TypeRotateX:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationX, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
 
-            case UsdGeomXformOp::TypeRotateY:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationY, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
+          case UsdGeomXformOp::TypeRotateY:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationY, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
 
-            case UsdGeomXformOp::TypeRotateZ:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationZ, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
-
-            default:
-              break;
-            }
-          }
-          break;
-
-        case kRotateAxis:
-          {
-            switch(op.GetOpType())
-            {
-            case UsdGeomXformOp::TypeRotateX:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisX, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
-
-            case UsdGeomXformOp::TypeRotateY:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisY, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
-
-            case UsdGeomXformOp::TypeRotateZ:
-              AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisZ, MAngle(value, MAngle::kDegrees)), xformError);
-              break;
-
-            default:
-              break;
-            }
-          }
-          break;
+          case UsdGeomXformOp::TypeRotateZ:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationZ, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
 
           default:
-          break;
+            break;
+          }
+        }
+        else if (opName == UsdMayaXformStackTokens->rotateAxis)
+        {
+          switch(op.GetOpType())
+          {
+          case UsdGeomXformOp::TypeRotateX:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisX, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
+
+          case UsdGeomXformOp::TypeRotateY:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisY, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
+
+          case UsdGeomXformOp::TypeRotateZ:
+            AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotateAxisZ, MAngle(value, MAngle::kDegrees)), xformError);
+            break;
+
+          default:
+            break;
+          }
         }
       }
       else
       if(attr_type == utils::UsdDataType::kMatrix4d)
       {
-        if(*opIt == kShear)
+        if(opClass.GetName() == UsdMayaXformStackTokens->shear)
         {
           GfMatrix4d value;
           const bool retValue = op.GetAs<GfMatrix4d>(&value, usdTime);
@@ -494,15 +532,20 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
           const float shearZ = value[2][1];
           AL_MAYA_CHECK_ERROR2(setVec3(to, m_shear, shearX, shearY, shearZ), xformError);
         }
+        // Don't have to worry about any transforms other than shear here, because we've only
+        // matched against MayaStack() and CommonStack() - the MatrixStack() case is handled
+        // in the generic transform case, below
       }
-
     }
   }
   else
   {
-    bool resetsXformStack = false;
     GfMatrix4d value;
-    xformSchema.GetLocalTransformation(&value, &resetsXformStack, usdTime);
+    const bool retValue = xformSchema.GetLocalTransformation(&value, &resetsXformStack, usdTime);
+    if(!retValue)
+    {
+      return MS::kFailure;
+    }
 
     double S[3], T[3];
     MEulerRotation R;
@@ -551,49 +594,52 @@ bool animationCheck(AnimationTranslator* animTranslator, MPlug plug)
 //----------------------------------------------------------------------------------------------------------------------
 UsdAttribute addTranslateOp(
     const UsdGeomXform& xformSchema,
-    const char* attrName,
+    TfToken attrName,
     const GfVec3f& currentValue,
-    const UsdTimeCode& time)
+    const UsdTimeCode& time,
+    bool invert=false)
 {
-  UsdGeomXformOp op = xformSchema.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken(attrName));
-  op.Set(currentValue, time);
+  UsdGeomXformOp op = xformSchema.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, attrName, invert);
+  if (!invert)
+  {
+    op.Set(currentValue, time);
+  }
   return op.GetAttr();
 }
 
 //----------------------------------------------------------------------------------------------------------------------
 UsdAttribute addRotateOp(
     const UsdGeomXform &xformSchema,
-    const char *attrName,
+    TfToken attrName,
     const int32_t& rotateOrder,
     const GfVec3f& rotation,
     const UsdTimeCode& time)
 {
-  TfToken rotateToken(attrName);
   UsdGeomXformOp op;
   switch(rotateOrder)
   {
   case MEulerRotation::kXYZ:
-    op = xformSchema.AddRotateXYZOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateXYZOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   case MEulerRotation::kXZY:
-    op = xformSchema.AddRotateXZYOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateXZYOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   case MEulerRotation::kYXZ:
-    op = xformSchema.AddRotateYXZOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateYXZOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   case MEulerRotation::kYZX:
-    op = xformSchema.AddRotateYZXOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateYZXOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   case MEulerRotation::kZXY:
-    op = xformSchema.AddRotateZXYOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateZXYOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   case MEulerRotation::kZYX:
-    op = xformSchema.AddRotateZYXOp(UsdGeomXformOp::PrecisionFloat, rotateToken);
+    op = xformSchema.AddRotateZYXOp(UsdGeomXformOp::PrecisionFloat, attrName);
     break;
 
   default:
@@ -681,21 +727,22 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
     plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_translation));
     if(plugAnimated || translation != defaultTranslation)
     {
-      UsdAttribute translateAttr = addTranslateOp(xformSchema, "translate", translation, params.m_timeCode);
+      UsdAttribute translateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->translate, translation, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_translation), translateAttr);
     }
 
     plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivotTranslate));
     if(plugAnimated || rotatePivotTranslate != defaultRotatePivotTranslate)
     {
-      UsdAttribute rotatePivotTranslateAttr = addTranslateOp(xformSchema, "rotatePivotTranslate", rotatePivotTranslate, params.m_timeCode);
+      UsdAttribute rotatePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivotTranslate, rotatePivotTranslate, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivotTranslate), rotatePivotTranslateAttr);
     }
 
     plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivot));
-    if(plugAnimated || rotatePivot != defaultRotatePivot)
+    bool makeRotatePivot = plugAnimated || rotatePivot != defaultRotatePivot;
+    if(makeRotatePivot)
     {
-      UsdAttribute rotatePivotAttr = addTranslateOp(xformSchema, "rotatePivot", rotatePivot, params.m_timeCode);
+      UsdAttribute rotatePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotAttr);
     }
 
@@ -703,7 +750,7 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
     if(plugAnimated || rotation != defaultRotation)
     {
       rotation *= radToDeg;
-      UsdAttribute rotateAttr = addRotateOp(xformSchema, "rotate", rotateOrder, rotation, params.m_timeCode);
+      UsdAttribute rotateAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotate, rotateOrder, rotation, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotation), rotateAttr, radToDeg);
     }
 
@@ -711,28 +758,27 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
     if(plugAnimated || rotateAxis != defaultRotateAxis)
     {
       rotateAxis *= radToDeg;
-      UsdAttribute rotateAxisAttr = addRotateOp(xformSchema, "rotateAxis", MEulerRotation::kXYZ, rotateAxis, params.m_timeCode);
+      UsdAttribute rotateAxisAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotateAxis, MEulerRotation::kXYZ, rotateAxis, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotateAxis), rotateAxisAttr, radToDeg);
     }
 
-    plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivot));
-    if(plugAnimated || rotatePivot != defaultRotatePivot)
+    if(makeRotatePivot)
     {
-      UsdAttribute rotatePivotINVAttr = addTranslateOp(xformSchema, "rotatePivotINV", -rotatePivot, params.m_timeCode);
-      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotINVAttr);
+      addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode, true);
     }
 
     plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivotTranslate));
     if(plugAnimated || scalePivotTranslate != defaultScalePivotTranslate)
     {
-      UsdAttribute scalePivotTranslateAttr = addTranslateOp(xformSchema, "scalePivotTranslate", scalePivotTranslate, params.m_timeCode);
+      UsdAttribute scalePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivotTranslate, scalePivotTranslate, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivotTranslate), scalePivotTranslateAttr);
     }
 
     plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivot));
-    if(plugAnimated || scalePivot != defaultScalePivot)
+    bool makeScalePivot = plugAnimated || scalePivot != defaultScalePivot;
+    if(makeScalePivot)
     {
-      UsdAttribute scalePivotAttr = addTranslateOp(xformSchema, "scalePivot", scalePivot, params.m_timeCode);
+      UsdAttribute scalePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotAttr);
     }
 
@@ -743,29 +789,27 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
           shear[0], 1.0f, 0.0f, 0.0f,
           shear[1], shear[2], 1.0f, 0.0f,
           0.0f, 0.0f, 0.0f, 1.0f);
-      UsdGeomXformOp op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, TfToken("shear"));
+      UsdGeomXformOp op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, UsdMayaXformStackTokens->shear);
       op.Set(shearMatrix, params.m_timeCode);
     }
 
     plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_scale));
     if(plugAnimated || scale != defaultScale)
     {
-      UsdGeomXformOp op = xformSchema.AddScaleOp(UsdGeomXformOp::PrecisionFloat, TfToken("scale"));
+      UsdGeomXformOp op = xformSchema.AddScaleOp(UsdGeomXformOp::PrecisionFloat, UsdMayaXformStackTokens->scale);
       op.Set(scale, params.m_timeCode);
       if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scale), op.GetAttr());
     }
 
-    plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivot));
-    if(plugAnimated || scalePivot != defaultScalePivot)
+    if(makeScalePivot)
     {
-      UsdAttribute scalePivotINVAttr = addTranslateOp(xformSchema, "scalePivotINV", -scalePivot, params.m_timeCode);
-      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotINVAttr);
+      addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode, true);
     }
   }
   else
   {
     MMatrix wsm = path.inclusiveMatrix();
-    auto op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, TfToken("transform"));
+    auto op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, UsdMayaXformStackTokens->transform);
     op.Set(*(const GfMatrix4d*)&wsm, params.m_timeCode);
     if(animTranslator) animTranslator->addWorldSpace(path, op.GetAttr());
   }

@@ -43,7 +43,8 @@ endif()
 
 include_directories(${MAYA_INCLUDE_DIRS})
 
-include_directories(${PXR_INCLUDE_DIRS})
+include_directories(${PXR_INCLUDE_DIRS} ${PXR_CMAKE_DIR}/third_party/maya/include)
+link_directories(${PXR_CMAKE_DIR}/third_party/maya/lib)
 
 # FindBoost is particularly buggy, and doesn't like custom boost locations.
 # Adding specific components forces calls to _Boost_find_library, which

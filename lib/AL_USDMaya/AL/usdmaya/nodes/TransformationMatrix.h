@@ -17,14 +17,15 @@
 
 #include "../Api.h"
 
-#include "AL/usdmaya/TransformOperation.h"
-
 #include "maya/MPxTransformationMatrix.h"
 #include "maya/MPxTransform.h"
 
 #include "pxr/pxr.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
+#include "usdMaya/xformStack.h"
+
+#include <unordered_set>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -45,7 +46,7 @@ class TransformationMatrix
   UsdGeomXform m_xform;
   UsdTimeCode m_time;
   std::vector<UsdGeomXformOp> m_xformops;
-  std::vector<TransformOperation> m_orderedOps;
+  UsdMayaXformStack::OpClassList m_orderedOps;
   MObjectHandle m_transformNode;
 
   // tweak values. These are applied on top of the USD transform values to produce the final result.
@@ -421,6 +422,14 @@ public:
   void pushToPrim();
 
 private:
+  // Used by various insert*Op methods
+  void insertOp(
+      UsdGeomXformOp::Type opType,
+      UsdGeomXformOp::Precision precision,
+      const TfToken& opName,
+      Flags newFlag,
+      bool insertAtBeginning=false);
+
   //  Translation methods:
   MStatus translateTo(const MVector &vector, MSpace::Space = MSpace::kTransform) override;
 

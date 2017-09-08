@@ -220,10 +220,12 @@ TEST(Transform, primHas)
     UsdGeomXform a8 = UsdGeomXform::Define(stage, SdfPath("/root/shear"));
     UsdGeomXform a9 = UsdGeomXform::Define(stage, SdfPath("/root/scale"));
     UsdGeomXform aA = UsdGeomXform::Define(stage, SdfPath("/root/transform"));
+    UsdGeomXform aB = UsdGeomXform::Define(stage, SdfPath("/root/pivotSingle"));
 
     a1.AddTranslateOp(UsdGeomXformOp::PrecisionDouble, TfToken("translate"));
 
     a2.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"));
+    a2.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"), true);
 
     a3.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("rotatePivotTranslate"));
 
@@ -242,6 +244,8 @@ TEST(Transform, primHas)
     a9.AddScaleOp(UsdGeomXformOp::PrecisionFloat, TfToken("scale"));
 
     aA.AddTransformOp(UsdGeomXformOp::PrecisionDouble, TfToken("transform"));
+
+    aB.AddTranslateOp(UsdGeomXformOp::PrecisionDouble, TfToken("pivot"));
 
     return stage;
   };
@@ -445,6 +449,20 @@ TEST(Transform, primHas)
         EXPECT_FALSE(matrix->primHasRotateAxes());
         EXPECT_FALSE(matrix->primHasPivot());
         EXPECT_TRUE(matrix->primHasTransform());
+      }
+      if(str == "/root/pivotSingle")
+      {
+        EXPECT_FALSE(matrix->primHasScale());
+        EXPECT_FALSE(matrix->primHasRotation());
+        EXPECT_FALSE(matrix->primHasTranslation());
+        EXPECT_FALSE(matrix->primHasShear());
+        EXPECT_FALSE(matrix->primHasScalePivot());
+        EXPECT_FALSE(matrix->primHasScalePivotTranslate());
+        EXPECT_FALSE(matrix->primHasRotatePivot());
+        EXPECT_FALSE(matrix->primHasRotatePivotTranslate());
+        EXPECT_FALSE(matrix->primHasRotateAxes());
+        EXPECT_FALSE(matrix->primHasPivot());
+        EXPECT_FALSE(matrix->primHasTransform());
       }
     }
   }
