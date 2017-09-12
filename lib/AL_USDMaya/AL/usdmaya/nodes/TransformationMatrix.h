@@ -75,15 +75,15 @@ class TransformationMatrix
   MVector m_localTranslateOffset;
 
   // methods that will insert a transform op into the ordered queue of operations, if for some.
-  void insertTranslateOp();
-  void insertScaleOp();
-  void insertShearOp();
-  void insertScalePivotOp();
-  void insertScalePivotTranslationOp();
-  void insertRotateOp();
-  void insertRotatePivotOp();
-  void insertRotatePivotTranslationOp();
-  void insertRotateAxesOp();
+  MStatus insertTranslateOp();
+  MStatus insertScaleOp();
+  MStatus insertShearOp();
+  MStatus insertScalePivotOp();
+  MStatus insertScalePivotTranslationOp();
+  MStatus insertRotateOp();
+  MStatus insertRotatePivotOp();
+  MStatus insertRotatePivotTranslationOp();
+  MStatus insertRotateAxesOp();
 
   enum Flags
   {
@@ -423,7 +423,7 @@ public:
 
 private:
   // Used by various insert*Op methods
-  void insertOp(
+  MStatus insertOp(
       UsdGeomXformOp::Type opType,
       UsdGeomXformOp::Precision precision,
       const TfToken& opName,
