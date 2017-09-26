@@ -1112,7 +1112,6 @@ void ProxyShape::reloadStage(MPlug& plug)
   {
     std::stringstream strstr;
     strstr << "Breakdown for file: " << file << std::endl;
-    maya::Profiler::printReport(strstr);
     MGlobal::displayInfo(convert(strstr.str()));
   }
 }
