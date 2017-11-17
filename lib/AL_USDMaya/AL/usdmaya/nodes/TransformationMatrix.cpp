@@ -817,31 +817,48 @@ bool TransformationMatrix::pushRotation(const MEulerRotation& value, UsdGeomXfor
 //----------------------------------------------------------------------------------------------------------------------
 void TransformationMatrix::initialiseToPrim(bool readFromPrim, Transform* transformNode)
 {
-  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::initialiseToPrim\n");
-
   // if not yet initialized, do not execute this code! (It will crash!).
   if(!m_prim)
     return;
 
+  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::initialiseToPrim: %s\n",
+      m_prim.GetPath().GetText());
+
   bool resetsXformStack = false;
   m_xformops = m_xform.GetOrderedXformOps(&resetsXformStack);
   m_orderedOps.clear();
+  m_orderedOpMayaIndices.clear();
 
   if(!resetsXformStack)
     m_flags |= kInheritsTransform;
 
-  m_orderedOps = UsdMayaXformStack::FirstMatchingSubstack(
-      {
-        &UsdMayaXformStack::MayaStack(),
-        &UsdMayaXformStack::CommonStack(),
-        &UsdMayaXformStack::MatrixStack()
-      },
-      m_xformops);
-
-  if(!m_orderedOps.empty())
+  if (m_xformops.empty())
   {
+    // An empty xform matches anything, so we'll say it matches maya...
     m_flags |= kFromMayaSchema;
+  }
+  else
+  {
+    static const std::pair<const UsdMayaXformStack&, uint32_t> stackFlagPairs[3] = {
+        {UsdMayaXformStack::MayaStack(), kFromMayaSchema},
+        {UsdMayaXformStack::CommonStack(), kFromCommonSchema},
+        {UsdMayaXformStack::MatrixStack(), kFromMatrix},
+    };
+    for (const auto& stackFlagPair : stackFlagPairs)
+    {
+      const auto& stack = stackFlagPair.first;
+      const auto flag = stackFlagPair.second;
+      m_orderedOps = stack.MatchingSubstack(m_xformops);
+      if (!m_orderedOps.empty())
+      {
+        m_flags |= flag;
+        break;
+      }
+    }
+  }
 
+  if(m_flags & kAnyKnownSchema)
+  {
     auto opIt = m_orderedOps.begin();
     for(std::vector<UsdGeomXformOp>::const_iterator it = m_xformops.begin(), e = m_xformops.end(); it != e; ++it, ++opIt)
     {
@@ -1135,6 +1152,50 @@ void TransformationMatrix::updateToTime(const UsdTimeCode& time)
   }
 }
 
+void TransformationMatrix::buildOrderedOpMayaIndices()
+{
+  if (m_orderedOpMayaIndices.empty() && !m_orderedOps.empty())
+  {
+    // fill out m_orderedOpMayaIndices, so we know where to insert stuff
+    if (m_flags & kFromMayaSchema)
+    {
+      const auto& mayaStack = UsdMayaXformStack::MayaStack();
+      m_orderedOpMayaIndices.reserve(m_orderedOps.size());
+      for(auto& op : m_orderedOps)
+      {
+        m_orderedOpMayaIndices.push_back(mayaStack.FindOpIndex(op.GetName(), op.IsInvertedTwin()));
+      }
+    }
+    else if (m_flags & kFromMayaSchema)
+    {
+      const auto& mayaStack = UsdMayaXformStack::MayaStack();
+      m_orderedOpMayaIndices.reserve(m_orderedOps.size());
+      for(auto& op : m_orderedOps)
+      {
+        // The only op in the common stack that has a different name than in the maya stack
+        // is the "pivot" op - for that, we consider the non-inverted version to have the same
+        // place as non-inverted rotatePivot, and the inverted version to have the same place
+        // s the inverted scalePivot, since that will give the same xform if we guarantee that
+        // rotatePivot == scalePivot... which we do
+        TfToken name = op.GetName();
+        bool isInverted = op.IsInvertedTwin();
+        if (name == UsdMayaXformStackTokens->pivot)
+        {
+          if (isInverted)
+          {
+            name = UsdMayaXformStackTokens->scalePivot;
+          }
+          else
+          {
+            name = UsdMayaXformStackTokens->rotatePivot;
+          }
+        }
+        m_orderedOpMayaIndices.push_back(mayaStack.FindOpIndex(name, isInverted));
+      }
+    }
+  }
+}
+
 MStatus TransformationMatrix::insertOp(
     UsdGeomXformOp::Type opType,
     UsdGeomXformOp::Precision precision,
@@ -1144,50 +1205,33 @@ MStatus TransformationMatrix::insertOp(
 {
   TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::insertOp - %s\n", opName.GetText());
 
+  // Build out the m_orderedOpMayaIndices so we know where to insert things - delayed
+  // till now, since most xforms won't be altered / have ops inserted, and won't need this
+  buildOrderedOpMayaIndices();
+
+  // If we currently have a singular "pivot" op, and we're trying to insert a rotatePivot or
+  // scalePivot, first see if it's actually necessary, and if so, "convert" our op stack to use
+  // split rotatePivot and scalePivot
+
+
   // Find an iterator pointing to the location in m_orderedOps where the given
   // maya operator should be inserted. Note that opIndex must refer to an entry in MayaStack
   // (not CommonStack, etc)
-  auto findOpInsertPos = [&](size_t opIndex)
-      -> UsdMayaXformStack::OpClassList::iterator {
+  auto findOpInsertPos = [&](size_t opIndex) -> int {
 
     assert(opIndex != UsdMayaXformStack::NO_INDEX);
 
     auto& mayaStack = UsdMayaXformStack::MayaStack();
     assert(opIndex < mayaStack.GetOps().size());
 
-    // We want to iterate through m_orderedOps, finding the first one that compares equal to something
-    // in the range [mayaOpIter , mayaStack.GetOps().cend() ) - so, ie, we insert before any op
-    // matching our op or any of the ones after it.
-    const auto mayaStart = mayaStack.GetOps().cbegin() + opIndex;
-    const auto mayaEnd = mayaStack.GetOps().cend();
-
-    // Iterate through m_orderedOps...
-    auto orderedIter = m_orderedOps.begin();
-    const auto orderedEnd = m_orderedOps.end();
-    bool foundMatch = false;
-    for(; orderedIter < orderedEnd; ++orderedIter)
-    {
-      // For each item in m_orderedOps, see if it compares equal to something in [mayaStart, mayaEnd)
-      for (auto mayaIter = mayaStart; mayaIter < mayaEnd; ++mayaIter)
-      {
-        // Note that we have to compare using the PxrUsdMayaXformOpClassification::operator ==
-        // We can't just rely on pointer equality, because the items in m_orderedOps may not be
-        // from MayaStack - ie, they might be CommonStack
-        if (*mayaIter == *orderedIter)
-        {
-          foundMatch = true;
-          break;
-        }
-      }
-      if (foundMatch) break;
-    }
-    return orderedIter;
+    auto indexIter = std::lower_bound(m_orderedOpMayaIndices.begin(),
+        m_orderedOpMayaIndices.end(), opIndex);
+    return indexIter - m_orderedOpMayaIndices.begin();
   };
 
   auto addOp = [&](
       size_t opIndex,
-      bool insertAtBeginning)
-      -> PxrUsdMayaXformStack::OpClassList::iterator {
+      bool insertAtBeginning) -> int {
     assert(opIndex != UsdMayaXformStack::NO_INDEX);
 
     auto& mayaStack = UsdMayaXformStack::MayaStack();
@@ -1195,41 +1239,39 @@ MStatus TransformationMatrix::insertOp(
     UsdGeomXformOp op = m_xform.AddXformOp(opType, precision, opName, opClass.IsInvertedTwin());
     if (!op)
     {
-      return m_orderedOps.end();
+      return -1;
     }
 
     // insert our op into the correct stack location
-    auto posInOps = insertAtBeginning ?
-        m_orderedOps.begin()
-        : findOpInsertPos(opIndex);
-    auto posInXfm = insertAtBeginning ?
-        m_xformops.begin()
-        : m_xformops.begin() + (posInOps - m_orderedOps.begin());
-    m_xformops.insert(posInXfm, op);
-    m_orderedOps.insert(posInOps, opClass);
-    return posInOps;
+    auto insertIndex = insertAtBeginning ? 0 : findOpInsertPos(opIndex);
+    m_orderedOps.insert(m_orderedOps.begin() + insertIndex, opClass);
+    m_xformops.insert(m_xformops.begin() + insertIndex, op);
+    m_orderedOpMayaIndices.insert(m_orderedOpMayaIndices.begin() + insertIndex, opIndex);
+    return insertIndex;
   };
 
   const UsdMayaXformStack::IndexPair& opPair = UsdMayaXformStack::MayaStack().FindOpIndexPair(opName);
 
   // Add the second first, so that if insertAtBeginning is true, they will
   // maintain the same order
-  auto secondPos = m_orderedOps.end();
+  auto secondPos = -1;
   if (opPair.second != UsdMayaXformStack::NO_INDEX)
   {
     secondPos = addOp(opPair.second, insertAtBeginning);
-    if (secondPos == m_orderedOps.end())
+    if (secondPos == -1)
     {
       return MStatus::kFailure;
     }
   }
   auto firstPos = addOp(opPair.first, insertAtBeginning);
-  if (firstPos == m_orderedOps.end())
+  if (firstPos == -1)
   {
-    if (opPair.second != nullptr && secondPos != m_orderedOps.end())
+    if (opPair.second != UsdMayaXformStack::NO_INDEX && secondPos != -1)
     {
       // Undo the insertion of the other pair if something went wrong
-      m_orderedOps.erase(secondPos);
+      m_orderedOps.erase(m_orderedOps.begin() + secondPos);
+      m_xformops.erase(m_xformops.begin() + secondPos);
+      m_orderedOpMayaIndices.erase(m_orderedOpMayaIndices.begin() + secondPos);
     }
     return MStatus::kFailure;
   }

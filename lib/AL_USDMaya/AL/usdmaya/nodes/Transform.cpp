@@ -360,8 +360,6 @@ MStatus Transform::connectionBroken(const MPlug& plug, const MPlug& otherPlug, b
 //
 MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& handle, const MDGContext& context)
 {
-  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
-
   if (plug.isNull())
     return MS::kFailure;
 
@@ -370,6 +368,8 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
 
   if (plug.isChild() && plug.parent().isLocked())
     return MS::kSuccess;
+
+  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
 
   // If the time values are changed, store the new values, and then update the transform
   if (plug == m_time || plug == m_timeOffset || plug == m_timeScalar)
