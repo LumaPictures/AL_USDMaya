@@ -99,8 +99,8 @@ class TransformationMatrix
     // or none of the above (no flags set)?
     kFromMatrix = 1 << 8,
     kFromMayaSchema = 1 << 9,
-    kFromCommonSchema = 1 << 10,
-    kAnyKnownSchema = kFromMatrix | kFromMayaSchema | kFromCommonSchema,
+    kSinglePivotSchema = 1 << 10,
+    kAnyKnownSchema = kFromMatrix | kFromMayaSchema | kSinglePivotSchema,
 
     // which transform components are present in the prim?
     kPrimHasScale = 1 << 16,
@@ -145,6 +145,16 @@ class TransformationMatrix
   bool internal_pushMatrix(const MMatrix& result, UsdGeomXformOp& op) { return pushMatrix(result, op, getTimeCode()); }
 
 public:
+
+  /// \brief  Return a static reference to a Xform Stack similar to the MayaStack, but with a single pivot
+  ///         Exists as a "bridge" between the CommonStack and the MayaStack. Having this stack allows
+  ///         this plugin to keep using the "original" xform ops as much as possible, until required
+  ///         to change them; otherwise, as soon as any non-CommonStack-compatible op was inserted, we
+  ///         would need to switch to a MayaStack, which would mean splitting the singular pivot to
+  ///         separate rotatePivot and scalePivot.
+  /// return  A UsdMayaXformStack that is similar to a MayaStack, but with a single pivot; a MayaStack
+  ///         and will have an equivalent MayaSinglePivotStack if the rotatePivot == scalePivot
+  static const UsdMayaXformStack& MayaSinglePivotStack();
 
   /// \brief  sets the MObject for the transform
   /// \param  object the MObject for the custom transform node
@@ -430,6 +440,25 @@ private:
   /// (since many / most xforms will never be altered, would be waste to
   /// do this for all xforms)
   void buildOrderedOpMayaIndices();
+
+  /// Will see if we need to split a singular pivot (from a CommonStack) into separate
+  /// rotatePivot and scalePivot (from a MayaStack), and do so if needed.  The return
+  /// result will be false if a "normal" rotatePivot or scalePivot insertOp should proceed,
+  /// and true if it is no longer needed.
+  ///
+  /// More precisely, it will be true if EITHER:
+  /// a) it already has a singular pivot, and no split is needed (because the rotatePivot
+  ///    and scale pivot are the same)
+  /// OR
+  /// b) it has a singular pivot, but the rotatePivot and scalePivot have diverged; in this
+  ///    case, it will remove the singular pivot, and insert both a rotatePivot and scalePivot...
+  ///    in which case, we no longer need to insert a rotatePivot or scalePivot, because
+  ///    this function has inserted both for you
+  bool splitPivotIfNeeded();
+
+  MStatus removeOp(
+      const TfToken& opName,
+      Flags oldFlag);
 
   // Used by various insert*Op methods
   MStatus insertOp(
