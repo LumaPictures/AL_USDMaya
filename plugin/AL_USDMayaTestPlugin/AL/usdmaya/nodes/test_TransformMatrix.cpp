@@ -1479,6 +1479,276 @@ TEST(Transform, emptyOpsNotMade)
   }
 }
 
+//  void MayaSinglePivotStack();
+TEST(Transform, splitPivot)
+{
+  const char* xformName = "myXform";
+  SdfPath xformPath(std::string("/") + xformName);
+  const GfVec3d translateVal(0.0, 0.009, 0.0075);
+  const GfVec3f pivotVal(1.0f, 0.0065f, 0.2f);
+  const float rotateXVal = 77.0f;
+
+
+  auto constructTransformChain = [&] ()
+  {
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    UsdGeomXform a = UsdGeomXform::Define(stage, xformPath);
+
+    std::vector<UsdGeomXformOp> ops;
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionDouble));
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot")));
+    ops.push_back(a.AddRotateXOp(UsdGeomXformOp::PrecisionFloat, TfToken("rotate")));
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"), true));
+
+    auto& singlePivotStack = AL::usdmaya::nodes::TransformationMatrix::MayaSinglePivotStack();
+    auto matchingXforms = singlePivotStack.MatchingSubstack(ops);
+    EXPECT_EQ(matchingXforms.size(), 4);
+    a.SetXformOpOrder(ops);
+
+    UsdGeomXformOp& translate = ops[0];
+    UsdGeomXformOp& pivot = ops[1];
+    UsdGeomXformOp& rotate = ops[2];
+
+    translate.Set(translateVal);
+    pivot.Set(pivotVal);
+    rotate.Set(rotateXVal);
+    return stage;
+  };
+
+  MFileIO::newFile(true);
+
+
+  const std::string temp_path = "/tmp/AL_USDMayaTests_transform_splitPivot.usda";
+  std::string sessionLayerContents;
+
+  // generate some data for the proxy shape
+  {
+    auto stage = constructTransformChain();
+    stage->Export(temp_path, false);
+  }
+
+  {
+    MFnDagNode fn;
+    MObject xform = fn.create("transform");
+    MString proxyParentMayaPath = fn.fullPathName();
+    MObject shape = fn.create("AL_usdmaya_ProxyShape", xform);
+    MString proxyShapeMayaPath = fn.fullPathName();
+
+    AL::usdmaya::nodes::ProxyShape* proxy = (AL::usdmaya::nodes::ProxyShape*)fn.userNode();
+
+    // force the stage to load
+    proxy->filePathPlug().setString(temp_path.c_str());
+
+    auto stage = proxy->getUsdStage();
+
+    auto xformPrim = stage->GetPrimAtPath(xformPath);
+    UsdGeomXform xformGeom(xformPrim);
+
+    // Make sure the xform op is initially what's expected
+    auto assertInitialOps = [&] () {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(xformOps.size(), 4);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+    {
+      SCOPED_TRACE("First load");
+      assertInitialOps();
+    }
+
+    // Select the xform, to make it in maya
+    MString cmd = MString("AL_usdmaya_ProxyShapeSelect -primPath \"")
+        + xformPath.GetText() + "\" -proxy \"" + proxyShapeMayaPath + "\"";
+    MGlobal::executeCommand(cmd);
+
+    MSelectionList sel;
+    EXPECT_TRUE(MGlobal::getActiveSelectionList(sel));
+    EXPECT_EQ(1, sel.length());
+    MObject xformMobj;
+    EXPECT_TRUE(sel.getDependNode(0, xformMobj));
+    MFnTransform xformMfn(xformMobj);
+
+    // Make sure the usd ops haven't changed yet
+    {
+      SCOPED_TRACE("After selection");
+      assertInitialOps();
+    }
+
+    // Now add an op that would be compatible with CommonStack
+    const GfVec3d scaleVal(1.0, 0.5, 1.0);
+    xformMfn.findPlug("scaleY").setDouble(scaleVal[1]);
+    // ...make sure we haven't split pivots...
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(5, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+
+    // Now add an op that would ISN'T compatible with CommonStack
+    const GfVec3d shearVal(.25, 0.0, 1.33);
+    const GfMatrix4d shearMatrix(
+      1,           0,           0, 0,
+      shearVal[0], 1,           0, 0,
+      shearVal[1], shearVal[2], 1, 0,
+      0,           0,           0, 1
+    );
+    xformMfn.setShear(shearVal.data());
+    // ...make sure we still haven't split pivots...
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+      GfMatrix4d matrixVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(6, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTransform, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:transform:shear"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&matrixVal, UsdTimeCode::Default()));
+      EXPECT_EQ(shearMatrix, matrixVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[5].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[5].GetOpName());
+      EXPECT_TRUE(xformOps[5].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+
+    // Finally, split the pivots...
+    const GfVec3d scalePivotVal(4, 5, 6);
+    MVector scalePivotMVec(scalePivotVal[0], scalePivotVal[1], scalePivotVal[2]);
+    xformMfn.setScalePivot(scalePivotMVec, MSpace::kObject, false);
+    // ...and make sure this is reflected correctly in xformOps
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+      GfMatrix4d matrixVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(8, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:rotatePivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:rotatePivot"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:scalePivot"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scalePivotVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTransform, xformOps[5].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:transform:shear"), xformOps[5].GetOpName());
+      EXPECT_TRUE(xformOps[5].GetAs(&matrixVal, UsdTimeCode::Default()));
+      EXPECT_EQ(shearMatrix, matrixVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[6].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[6].GetOpName());
+      EXPECT_TRUE(xformOps[6].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[7].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:scalePivot"), xformOps[7].GetOpName());
+      EXPECT_TRUE(xformOps[7].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scalePivotVal, vec3dVal);
+    };
+  }
+}
+
 //  TransformationMatrix();
 //  TransformationMatrix(const UsdPrim& prim);
 //  void setPrim(const UsdPrim& prim);
