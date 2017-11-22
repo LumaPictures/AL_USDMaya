@@ -1592,6 +1592,31 @@ TEST(Transform, splitPivot)
     EXPECT_TRUE(sel.getDependNode(0, xformMobj));
     MFnTransform xformMfn(xformMobj);
 
+    // Make sure the maya xform translated correctly
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.0, 0.224951054344, 0.974370064785, 0.0},
+        {0.0, -0.974370064785, 0.224951054344, 0.0},
+        {0.0, 0.208911831104, 0.15617638371, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
+
     // Make sure the usd ops haven't changed yet
     {
       SCOPED_TRACE("After selection");
@@ -1637,6 +1662,34 @@ TEST(Transform, splitPivot)
       EXPECT_TRUE(xformOps[4].GetAs(&vec3fVal, UsdTimeCode::Default()));
       EXPECT_EQ(pivotVal, vec3fVal);
     };
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.0, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.974370064785, 0.224951054344, 0.0},
+        {0.0, 0.20964292203, 0.159343086421, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
 
     // Now add an op that would ISN'T compatible with CommonStack
     const GfVec3d shearVal(.25, 0.0, 1.33);
@@ -1689,6 +1742,37 @@ TEST(Transform, splitPivot)
       EXPECT_TRUE(xformOps[5].GetAs(&vec3fVal, UsdTimeCode::Default()));
       EXPECT_EQ(pivotVal, vec3fVal);
     };
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[0], xformMfn.findPlug("shearXY").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[1], xformMfn.findPlug("shearXZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[2], xformMfn.findPlug("shearYZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.125, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.675185162508, 1.52086324051, 0.0},
+        {-0.0008125, 0.149805941575, -0.0998393508122, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
 
     // Finally, split the pivots...
     const GfVec3d scalePivotVal(4, 5, 6);
@@ -1745,7 +1829,38 @@ TEST(Transform, splitPivot)
       EXPECT_EQ(TfToken("!invert!xformOp:translate:scalePivot"), xformOps[7].GetOpName());
       EXPECT_TRUE(xformOps[7].GetAs(&vec3dVal, UsdTimeCode::Default()));
       EXPECT_EQ(scalePivotVal, vec3dVal);
-    };
+    }
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[0], xformMfn.findPlug("shearXY").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[1], xformMfn.findPlug("shearXZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[2], xformMfn.findPlug("shearYZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.125, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.675185162508, 1.52086324051, 0.0},
+        {-0.625, -1.0238199467, -5.18337157131, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
   }
 }
 

@@ -125,6 +125,8 @@ public:
   MPxNode::SchedulingType schedulingType() const override
     { return kParallel; }
 
+  void setPrim(const UsdPrim& prim);
+
   inline const MObject getProxyShape() const
     { return proxyShapeHandle.object(); }
 

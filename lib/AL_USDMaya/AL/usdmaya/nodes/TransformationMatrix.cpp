@@ -107,18 +107,18 @@ TransformationMatrix::TransformationMatrix(const UsdPrim& prim)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-void TransformationMatrix::setPrim(const UsdPrim& prim, Transform* transformNode)
+void TransformationMatrix::setPrimInternal(const UsdPrim& prim, Transform* transformNode)
 {
   if(prim.IsValid())
   {
-    TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::setPrim %s\n", prim.GetName().GetText());
+    TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::setPrimInternal %s\n", prim.GetName().GetText());
     m_prim = prim;
     UsdGeomXform xform(prim);
     m_xform = xform;
   }
   else
   {
-    TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::setPrim null\n");
+    TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformationMatrix::setPrimInternal null\n");
     m_prim = UsdPrim();
     m_xform = UsdGeomXform();
   }

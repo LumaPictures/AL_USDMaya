@@ -294,8 +294,10 @@ public:
   TransformationMatrix(const UsdPrim& prim);
 
   /// \brief  set the prim that this transformation matrix will read/write to.
+  ///         Renamed to "setPrimInternal" to emphasize that you should generally use
+  ///         Transform::setPrim (and only it will call setPrimInternal)
   /// \param  prim the prim
-  void setPrim(const UsdPrim& prim, Transform* transformNode);
+  void setPrimInternal(const UsdPrim& prim, Transform* transformNode);
 
   /// \brief  If set to true, modifications to these transform attributes will be pushed back onto the original prim.
   /// \param  enabled true will cause changes to this transform update the values on the USD prim. False will mean that
