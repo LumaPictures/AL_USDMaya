@@ -299,7 +299,7 @@ void Transform::updateTransform(MDataBlock& dataBlock)
 //----------------------------------------------------------------------------------------------------------------------
 void Transform::setPrim(const UsdPrim& prim)
 {
-  transform()->setPrimInternal(prim);
+  transform()->setPrimInternal(prim, this);
   // Now make sure our own attributes are up-to-date
   dirtyMatrix();
 }
@@ -466,11 +466,11 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
         primPath = SdfPath(path.asChar());
         usdPrim = data->stage->GetPrimAtPath(primPath);
       }
-      transform()->setPrim(usdPrim, this);
+      setPrim(usdPrim);
     }
     else
     {
-      transform()->setPrim(UsdPrim(), this);
+      setPrim(UsdPrim());
     }
     return MS::kSuccess;
   }

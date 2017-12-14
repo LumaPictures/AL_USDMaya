@@ -1177,19 +1177,25 @@ void TransformationMatrix::updateToTime(const UsdTimeCode& time)
           {
             GfMatrix4d matrix;
             op.Get<GfMatrix4d>(&matrix, getTimeCode());
-            double T[3], S[3];
-            AL::usdmaya::utils::matrixToSRT(matrix, S, m_rotationFromUsd, T);
-            m_scaleFromUsd.x = S[0];
-            m_scaleFromUsd.y = S[1];
-            m_scaleFromUsd.z = S[2];
-            m_translationFromUsd.x = T[0];
-            m_translationFromUsd.y = T[1];
-            m_translationFromUsd.z = T[2];
+            // We can't use MPxTransformationMatrix::decomposeMatrix directly, as we need to add in tweak values
+            MTransformationMatrix mayaXform = AL::usdmaya::utils::matrixToMTransformationMatrix(matrix);
+            m_rotationFromUsd = mayaXform.eulerRotation();
+            m_translationFromUsd = mayaXform.getTranslation(MSpace::kObject);
+            double tempDoubles[3];
+            mayaXform.getScale(tempDoubles, MSpace::kObject);
+            m_scaleFromUsd.x = tempDoubles[0];
+            m_scaleFromUsd.y = tempDoubles[1];
+            m_scaleFromUsd.z = tempDoubles[2];
+            mayaXform.getShear(tempDoubles, MSpace::kObject);
+            m_shearFromUsd.x = tempDoubles[0];
+            m_shearFromUsd.y = tempDoubles[1];
+            m_shearFromUsd.z = tempDoubles[2];
             MPxTransformationMatrix::rotationValue.x = m_rotationFromUsd.x + m_rotationTweak.x;
             MPxTransformationMatrix::rotationValue.y = m_rotationFromUsd.y + m_rotationTweak.y;
             MPxTransformationMatrix::rotationValue.z = m_rotationFromUsd.z + m_rotationTweak.z;
             MPxTransformationMatrix::translationValue = m_translationFromUsd + m_translationTweak;
             MPxTransformationMatrix::scaleValue = m_scaleFromUsd + m_scaleTweak;
+            MPxTransformationMatrix::shearValue = m_shearFromUsd + m_shearTweak;
           }
         }
       }

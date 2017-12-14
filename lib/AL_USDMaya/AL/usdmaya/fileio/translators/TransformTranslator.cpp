@@ -546,16 +546,7 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
     {
       return MS::kFailure;
     }
-
-    double S[3], T[3];
-    MEulerRotation R;
-    AL::usdmaya::utils::matrixToSRT(value, S, R, T);
-    MVector rotVector = R.asVector();
-    AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationX, MAngle(rotVector.x, MAngle::kRadians)), xformError);
-    AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationY, MAngle(rotVector.y, MAngle::kRadians)), xformError);
-    AL_MAYA_CHECK_ERROR2(setAngle(to, m_rotationZ, MAngle(rotVector.z, MAngle::kRadians)), xformError);
-    AL_MAYA_CHECK_ERROR2(setVec3(to, m_translation, T[0], T[1], T[2]), xformError);
-    AL_MAYA_CHECK_ERROR2(setVec3(to, m_scale, S[0], S[1], S[2]), xformError);
+    MFnTransform(to).set(AL::usdmaya::utils::matrixToMTransformationMatrix(value));
   }
 
   AL_MAYA_CHECK_ERROR2(setBool(to, m_inheritsTransform, !resetsXformStack), xformError);
