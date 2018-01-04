@@ -28,6 +28,7 @@
 #include "maya/MPxDrawOverride.h"
 #include "maya/MEvaluationNode.h"
 #include "maya/MDagModifier.h"
+#include "maya/MObjectArray.h"
 #include "maya/MSelectionList.h"
 #include "pxr/pxr.h"
 #include "pxr/usd/usd/prim.h"
@@ -209,6 +210,7 @@ class ProxyShape
 {
   friend class SelectionUndoHelper;
   friend class ProxyShapeUI;
+  friend class StageReloadGuard;
 public:
 
   typedef TfHashSet<SdfPath, SdfPath::Hash> SdfPathHashSet;
@@ -228,24 +230,6 @@ public:
   /// \name   Type Info & Registration
   //--------------------------------------------------------------------------------------------------------------------
   AL_MAYA_DECLARE_NODE();
-
-  //--------------------------------------------------------------------------------------------------------------------
-  /// \name   Layers API
-  //--------------------------------------------------------------------------------------------------------------------
-
-  /// \brief  Locate the maya node associated with the specified layer
-  /// \param  handle the usd layer to locate
-  /// \return a pointer to the maya node that references the layer, or NULL if the layer was not found
-  Layer* findLayer(SdfLayerHandle handle);
-
-  /// \brief  Locate the name of the maya node associated with the specified layer
-  /// \param  handle the usd layer name to locate
-  /// \return the name of the maya node that references the layer, or and empty string if the layer was not found
-  MString findLayerMayaName(SdfLayerHandle handle);
-
-  /// \brief  return the node that represents the root layer
-  /// \return the root layer, or NULL if stage is invalid
-  Layer* getLayer();
 
   //--------------------------------------------------------------------------------------------------------------------
   /// \name   Input Attributes
@@ -322,6 +306,9 @@ public:
 
   /// Version of the plugin at the time of creation (read-only)
   AL_DECL_ATTRIBUTE(version);
+
+  /// Force the outStageData to be marked dirty (write-only)
+  AL_DECL_ATTRIBUTE(stageDataDirty);
 
   //--------------------------------------------------------------------------------------------------------------------
   /// \name   Output Attributes
@@ -645,6 +632,18 @@ public:
   /// \param[in] primPath of the point in the hierarchy that is potentially undergoing structural changes
   void resync(const SdfPath& primPath);
 
+
+  // \brief Serialize information unique to this shape
+  void serialize();
+
+  // \brief Serialize all layers in proxyShapes to layerManager attributes; called before saving
+  static void serializeAll();
+
+  static inline std::vector<MObjectHandle>& GetUnloadedProxyShapes()
+  {
+    return m_unloadedProxyShapes;
+  }
+
   /// \brief This function starts the prim changed process within the proxyshape
   /// \param[in] changePath is point at which the scene is going to be modified.
   inline void primChangedAtPath(const SdfPath& changePath)
@@ -685,6 +684,8 @@ public:
   /// \return A constant SelectableDB owned by the ProxyShape
   const AL::usdmaya::SelectabilityDB& selectabilityDB() const
     { return const_cast<ProxyShape*>(this)->selectabilityDB(); }
+
+  void loadStage();
 
 
 private:
@@ -772,7 +773,6 @@ private:
     };
   };
 
-
   /// if the USD stage contains a maya reference et-al, then we have a set of *REQUIRED* AL::usdmaya::nodes::Transform nodes.
   /// If we then later create a USD transform node (because we're bringing in all of them, or just a selection of them),
   /// then we must make sure that we don't end up duplicating paths. This map is use to store a LUT of the paths that
@@ -830,7 +830,6 @@ private:
   bool primHasExcludedParent(UsdPrim prim);
   bool initPrim(const uint32_t index, MDGContext& ctx);
 
-  void reloadStage(MPlug& plug);
   void layerIdChanged(SdfNotice::LayerIdentifierDidChange const& notice, UsdStageWeakPtr const& sender);
   void onObjectsChanged(UsdNotice::ObjectsChanged const&, UsdStageWeakPtr const& sender);
   void variantSelectionListener(SdfNotice::LayersDidChange const& notice);
@@ -854,6 +853,8 @@ private:
     }
 
 private:
+  static std::vector<MObjectHandle> m_unloadedProxyShapes;
+
   AL::usdmaya::SelectabilityDB m_selectabilityDB;
   HierarchyIterationLogics m_hierarchyIterationLogics;
   HierarchyIterationLogic m_findExcludedPrims;
@@ -868,7 +869,6 @@ private:
   TfNotice::Key m_editTargetChanged;
 
   mutable std::map<UsdTimeCode, MBoundingBox> m_boundingBoxCache;
-  MCallbackId m_beforeSaveSceneId;
   MCallbackId m_attributeChanged;
   MCallbackId m_onSelectionChanged;
   SdfPathVector m_excludedGeometry;

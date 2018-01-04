@@ -40,6 +40,7 @@ link_directories(${PXR_CMAKE_DIR}/third_party/maya/lib)
 # is the rationale for listing them here.
 find_package(Boost COMPONENTS
                 python
+                thread
                 REQUIRED
 )
 
