@@ -39,12 +39,9 @@ add_definitions(${_PXR_CXX_DEFINITIONS})
 
 find_package(Maya REQUIRED)
 include_directories(${MAYA_INCLUDE_DIRS})
+link_directories(${MAYA_LIBRARY_DIR})
 
-if(${MAYA_API_VERSION} STRGREATER 2017)
-    find_package(Qt5Gui REQUIRED)
-else()
-    find_package(Qt4 REQUIRED QtGui)
-endif()
+# don't need to find Qt5/Qt4, as we want to just use the ones supplied by maya
 
 include_directories(${PXR_INCLUDE_DIRS})
 
