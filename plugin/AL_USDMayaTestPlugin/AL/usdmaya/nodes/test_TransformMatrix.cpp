@@ -214,10 +214,12 @@ TEST(Transform, primHas)
     UsdGeomXform a8 = UsdGeomXform::Define(stage, SdfPath("/root/shear"));
     UsdGeomXform a9 = UsdGeomXform::Define(stage, SdfPath("/root/scale"));
     UsdGeomXform aA = UsdGeomXform::Define(stage, SdfPath("/root/transform"));
+    UsdGeomXform aB = UsdGeomXform::Define(stage, SdfPath("/root/pivotSingle"));
 
     a1.AddTranslateOp(UsdGeomXformOp::PrecisionDouble, TfToken("translate"));
 
     a2.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"));
+    a2.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"), true);
 
     a3.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("rotatePivotTranslate"));
 
@@ -236,6 +238,8 @@ TEST(Transform, primHas)
     a9.AddScaleOp(UsdGeomXformOp::PrecisionFloat, TfToken("scale"));
 
     aA.AddTransformOp(UsdGeomXformOp::PrecisionDouble, TfToken("transform"));
+
+    aB.AddTranslateOp(UsdGeomXformOp::PrecisionDouble, TfToken("pivot"));
 
     return stage;
   };
@@ -439,6 +443,20 @@ TEST(Transform, primHas)
         EXPECT_FALSE(matrix->primHasRotateAxes());
         EXPECT_FALSE(matrix->primHasPivot());
         EXPECT_TRUE(matrix->primHasTransform());
+      }
+      if(str == "/root/pivotSingle")
+      {
+        EXPECT_FALSE(matrix->primHasScale());
+        EXPECT_FALSE(matrix->primHasRotation());
+        EXPECT_FALSE(matrix->primHasTranslation());
+        EXPECT_FALSE(matrix->primHasShear());
+        EXPECT_FALSE(matrix->primHasScalePivot());
+        EXPECT_FALSE(matrix->primHasScalePivotTranslate());
+        EXPECT_FALSE(matrix->primHasRotatePivot());
+        EXPECT_FALSE(matrix->primHasRotatePivotTranslate());
+        EXPECT_FALSE(matrix->primHasRotateAxes());
+        EXPECT_FALSE(matrix->primHasPivot());
+        EXPECT_FALSE(matrix->primHasTransform());
       }
     }
   }
@@ -1141,6 +1159,391 @@ TEST(Transform, getTimeCode)
 TEST(Transform, matrixAnimationChannels)
 {
   AL_USDMAYA_UNTESTED;
+}
+
+//  void MayaSinglePivotStack();
+TEST(Transform, splitPivot)
+{
+  const char* xformName = "myXform";
+  SdfPath xformPath(std::string("/") + xformName);
+  const GfVec3d translateVal(0.0, 0.009, 0.0075);
+  const GfVec3f pivotVal(1.0f, 0.0065f, 0.2f);
+  const float rotateXVal = 77.0f;
+
+
+  auto constructTransformChain = [&] ()
+  {
+    UsdStageRefPtr stage = UsdStage::CreateInMemory();
+    UsdGeomXform a = UsdGeomXform::Define(stage, xformPath);
+
+    std::vector<UsdGeomXformOp> ops;
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionDouble));
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot")));
+    ops.push_back(a.AddRotateXOp(UsdGeomXformOp::PrecisionFloat, TfToken("rotate")));
+    ops.push_back(a.AddTranslateOp(UsdGeomXformOp::PrecisionFloat, TfToken("pivot"), true));
+
+    auto& singlePivotStack = AL::usdmaya::nodes::TransformationMatrix::MayaSinglePivotStack();
+    auto matchingXforms = singlePivotStack.MatchingSubstack(ops);
+    EXPECT_EQ(matchingXforms.size(), 4);
+    a.SetXformOpOrder(ops);
+
+    UsdGeomXformOp& translate = ops[0];
+    UsdGeomXformOp& pivot = ops[1];
+    UsdGeomXformOp& rotate = ops[2];
+
+    translate.Set(translateVal);
+    pivot.Set(pivotVal);
+    rotate.Set(rotateXVal);
+    return stage;
+  };
+
+  MFileIO::newFile(true);
+
+
+  const std::string temp_path = "/tmp/AL_USDMayaTests_transform_splitPivot.usda";
+  std::string sessionLayerContents;
+
+  // generate some data for the proxy shape
+  {
+    auto stage = constructTransformChain();
+    stage->Export(temp_path, false);
+  }
+
+  {
+    MFnDagNode fn;
+    MObject xform = fn.create("transform");
+    MString proxyParentMayaPath = fn.fullPathName();
+    MObject shape = fn.create("AL_usdmaya_ProxyShape", xform);
+    MString proxyShapeMayaPath = fn.fullPathName();
+
+    AL::usdmaya::nodes::ProxyShape* proxy = (AL::usdmaya::nodes::ProxyShape*)fn.userNode();
+
+    // force the stage to load
+    proxy->filePathPlug().setString(temp_path.c_str());
+
+    auto stage = proxy->getUsdStage();
+
+    auto xformPrim = stage->GetPrimAtPath(xformPath);
+    UsdGeomXform xformGeom(xformPrim);
+
+    // Make sure the xform op is initially what's expected
+    auto assertInitialOps = [&] () {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(xformOps.size(), 4);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+    {
+      SCOPED_TRACE("First load");
+      assertInitialOps();
+    }
+
+    // Select the xform, to make it in maya
+    MString cmd = MString("AL_usdmaya_ProxyShapeSelect -primPath \"")
+        + xformPath.GetText() + "\" -proxy \"" + proxyShapeMayaPath + "\"";
+    MGlobal::executeCommand(cmd);
+
+    MSelectionList sel;
+    EXPECT_TRUE(MGlobal::getActiveSelectionList(sel));
+    EXPECT_EQ(1, sel.length());
+    MObject xformMobj;
+    EXPECT_TRUE(sel.getDependNode(0, xformMobj));
+    MFnTransform xformMfn(xformMobj);
+
+    // Make sure the maya xform translated correctly
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.0, 0.224951054344, 0.974370064785, 0.0},
+        {0.0, -0.974370064785, 0.224951054344, 0.0},
+        {0.0, 0.208911831104, 0.15617638371, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
+
+    // Make sure the usd ops haven't changed yet
+    {
+      SCOPED_TRACE("After selection");
+      assertInitialOps();
+    }
+
+    // Now add an op that would be compatible with CommonStack
+    const GfVec3d scaleVal(1.0, 0.5, 1.0);
+    xformMfn.findPlug("scaleY").setDouble(scaleVal[1]);
+    // ...make sure we haven't split pivots...
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(5, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.0, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.974370064785, 0.224951054344, 0.0},
+        {0.0, 0.20964292203, 0.159343086421, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
+
+    // Now add an op that would ISN'T compatible with CommonStack
+    const GfVec3d shearVal(.25, 0.0, 1.33);
+    const GfMatrix4d shearMatrix(
+      1,           0,           0, 0,
+      shearVal[0], 1,           0, 0,
+      shearVal[1], shearVal[2], 1, 0,
+      0,           0,           0, 1
+    );
+    xformMfn.setShear(shearVal.data());
+    // ...make sure we still haven't split pivots...
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+      GfMatrix4d matrixVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(6, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:pivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTransform, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:transform:shear"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&matrixVal, UsdTimeCode::Default()));
+      EXPECT_EQ(shearMatrix, matrixVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[5].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:pivot"), xformOps[5].GetOpName());
+      EXPECT_TRUE(xformOps[5].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+    };
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[0], xformMfn.findPlug("shearXY").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[1], xformMfn.findPlug("shearXZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[2], xformMfn.findPlug("shearYZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.125, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.675185162508, 1.52086324051, 0.0},
+        {-0.0008125, 0.149805941575, -0.0998393508122, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
+
+    // Finally, split the pivots...
+    const GfVec3d scalePivotVal(4, 5, 6);
+    MVector scalePivotMVec(scalePivotVal[0], scalePivotVal[1], scalePivotVal[2]);
+    xformMfn.setScalePivot(scalePivotMVec, MSpace::kObject, false);
+    // ...and make sure this is reflected correctly in xformOps
+    {
+      GfVec3d vec3dVal;
+      GfVec3f vec3fVal;
+      float floatVal;
+      GfMatrix4d matrixVal;
+
+      bool resetsXform;
+      auto xformOps = xformGeom.GetOrderedXformOps(&resetsXform);
+      EXPECT_FALSE(resetsXform);
+      ASSERT_EQ(8, xformOps.size());
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[0].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate"), xformOps[0].GetOpName());
+      EXPECT_TRUE(xformOps[0].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(translateVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[1].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:rotatePivot"), xformOps[1].GetOpName());
+      EXPECT_TRUE(xformOps[1].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeRotateX, xformOps[2].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:rotateX:rotate"), xformOps[2].GetOpName());
+      EXPECT_TRUE(xformOps[2].GetAs(&floatVal, UsdTimeCode::Default()));
+      EXPECT_EQ(rotateXVal, floatVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[3].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:rotatePivot"), xformOps[3].GetOpName());
+      EXPECT_TRUE(xformOps[3].GetAs(&vec3fVal, UsdTimeCode::Default()));
+      EXPECT_EQ(pivotVal, vec3fVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[4].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:translate:scalePivot"), xformOps[4].GetOpName());
+      EXPECT_TRUE(xformOps[4].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scalePivotVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTransform, xformOps[5].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:transform:shear"), xformOps[5].GetOpName());
+      EXPECT_TRUE(xformOps[5].GetAs(&matrixVal, UsdTimeCode::Default()));
+      EXPECT_EQ(shearMatrix, matrixVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeScale, xformOps[6].GetOpType());
+      EXPECT_EQ(TfToken("xformOp:scale:scale"), xformOps[6].GetOpName());
+      EXPECT_TRUE(xformOps[6].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scaleVal, vec3dVal);
+
+      EXPECT_EQ(UsdGeomXformOp::TypeTranslate, xformOps[7].GetOpType());
+      EXPECT_EQ(TfToken("!invert!xformOp:translate:scalePivot"), xformOps[7].GetOpName());
+      EXPECT_TRUE(xformOps[7].GetAs(&vec3dVal, UsdTimeCode::Default()));
+      EXPECT_EQ(scalePivotVal, vec3dVal);
+    }
+
+    // Confirm the maya xform...
+    {
+      EXPECT_EQ(proxyParentMayaPath + "|" + xformName, xformMfn.fullPathName());
+      EXPECT_NEAR(translateVal[0], xformMfn.findPlug("translateX").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[1], xformMfn.findPlug("translateY").asDouble(), 1e-5);
+      EXPECT_NEAR(translateVal[2], xformMfn.findPlug("translateZ").asDouble(), 1e-5);
+      EXPECT_NEAR(rotateXVal, GfRadiansToDegrees(xformMfn.findPlug("rotateX").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateY").asDouble()), 1e-5);
+      EXPECT_NEAR(0.0f, GfRadiansToDegrees(xformMfn.findPlug("rotateZ").asDouble()), 1e-5);
+      EXPECT_NEAR(pivotVal[0], xformMfn.findPlug("rotatePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[1], xformMfn.findPlug("rotatePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(pivotVal[2], xformMfn.findPlug("rotatePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[0], xformMfn.findPlug("scalePivotX").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[1], xformMfn.findPlug("scalePivotY").asDouble(), 1e-5);
+      EXPECT_NEAR(scalePivotVal[2], xformMfn.findPlug("scalePivotZ").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[0], xformMfn.findPlug("scaleX").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[1], xformMfn.findPlug("scaleY").asDouble(), 1e-5);
+      EXPECT_NEAR(scaleVal[2], xformMfn.findPlug("scaleZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[0], xformMfn.findPlug("shearXY").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[1], xformMfn.findPlug("shearXZ").asDouble(), 1e-5);
+      EXPECT_NEAR(shearVal[2], xformMfn.findPlug("shearYZ").asDouble(), 1e-5);
+      double expectedMatDoubles[4][4] = {
+        {1.0, 0.0, 0.0, 0.0},
+        {0.125, 0.112475527172, 0.487185032393, 0.0},
+        {0.0, -0.675185162508, 1.52086324051, 0.0},
+        {-0.625, -1.0238199467, -5.18337157131, 1.0}
+      };
+      MMatrix expectedMat(expectedMatDoubles);
+      EXPECT_TRUE(expectedMat.isEquivalent(xformMfn.transformationMatrix(), 1e-5));
+    }
+  }
 }
 
 //  TransformationMatrix();

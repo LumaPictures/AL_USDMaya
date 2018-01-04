@@ -30,7 +30,6 @@ list(APPEND AL_usdmaya_headers
         AL/usdmaya/PluginRegister.h
         AL/usdmaya/StageCache.h
         AL/usdmaya/StageData.h
-        AL/usdmaya/TransformOperation.h
         AL/usdmaya/TypeIDs.h
         AL/usdmaya/Utils.h
         AL/usdmaya/DebugCodes.h
@@ -44,7 +43,6 @@ list(APPEND AL_usdmaya_source
         AL/usdmaya/Global.cpp
         AL/usdmaya/StageCache.cpp
         AL/usdmaya/StageData.cpp
-        AL/usdmaya/TransformOperation.cpp
         AL/usdmaya/Utils.cpp
         AL/usdmaya/DebugCodes.cpp
         AL/usdmaya/Metadata.cpp
@@ -198,6 +196,7 @@ target_link_libraries(${LIBRARY_NAME}
     usdUtils
     usdImaging
     usdImagingGL
+    usdMaya
     vt
     rt
     ${PYTHON_LIBRARIES}

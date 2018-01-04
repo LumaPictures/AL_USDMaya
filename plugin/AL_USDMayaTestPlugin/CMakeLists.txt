@@ -8,15 +8,16 @@ find_package(GTest REQUIRED)
 set(PXR_PACKAGE AL_USDMayaTestPlugin)
 
 list(APPEND AL_maya_test_headers
-		AL/UnitTestHarness.h
+        AL/UnitTestHarness.h
         AL/maya/tests/CommandGuiHelperTest.h
         AL/maya/tests/NodeHelperUnitTest.h
         test_usdmaya.h
 )
 list(APPEND AL_maya_test_source
-		AL/UnitTestHarness.cpp
+        AL/UnitTestHarness.cpp
         AL/maya/tests/CommandGuiHelperTest.cpp
         AL/maya/tests/NodeHelperUnitTest.cpp
+        AL/usdmaya/commands/test_ImportCommands.cpp
         AL/usdmaya/commands/test_ExportCommands.cpp
         AL/usdmaya/commands/test_LayerCommands.cpp
         AL/usdmaya/commands/test_ProxyShapeSelect.cpp

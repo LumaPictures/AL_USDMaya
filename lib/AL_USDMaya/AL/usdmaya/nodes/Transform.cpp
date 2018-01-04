@@ -88,7 +88,7 @@ MStatus Transform::connectionMade(const MPlug& plug, const MPlug& otherPlug, boo
         MString path = inputStringValue(dataBlock, m_primPath);
         SdfPath primPath(path.asChar());
         UsdPrim usdPrim = data->stage->GetPrimAtPath(primPath);
-        transform()->setPrim(usdPrim);
+        setPrim(usdPrim);
         outputBoolValue(dataBlock, m_pushToPrim, transform()->pushToPrimEnabled());
         outputBoolValue(dataBlock, m_readAnimatedValues, transform()->readAnimatedValues());
         dirtyMatrix();
@@ -99,7 +99,7 @@ MStatus Transform::connectionMade(const MPlug& plug, const MPlug& otherPlug, boo
         {
           MGlobal::displayWarning(MString("[Transform] usd stage not found"));
         }
-        transform()->setPrim(UsdPrim());
+        setPrim(UsdPrim());
         dirtyMatrix();
       }
     }
@@ -114,7 +114,7 @@ MStatus Transform::connectionBroken(const MPlug& plug, const MPlug& otherPlug, b
   TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::connectionBroken\n");
   if(plug == m_inStageData)
   {
-    transform()->setPrim(UsdPrim());
+    setPrim(UsdPrim());
     return MS::kSuccess;
   }
   return MS::kUnknownParameter;
@@ -253,6 +253,14 @@ void Transform::updateTransform(MDataBlock& dataBlock)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+void Transform::setPrim(const UsdPrim& prim)
+{
+  transform()->setPrimInternal(prim);
+  // Now make sure our own attributes are up-to-date
+  dirtyMatrix();
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 // If any value changes, that affects the resulting transform (the non-animated m_localTranslateOffset value is a good
 // example), then it only needs to be set here. If an attribute drives one of the TRS components (e.g. 'time' modifies
 // the translate / rotate / scale values), then it needs to be set here, and it also needs to be handled in the compute
@@ -261,8 +269,6 @@ void Transform::updateTransform(MDataBlock& dataBlock)
 //
 MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& handle, const MDGContext& context)
 {
-  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
-
   if (plug.isNull())
     return MS::kFailure;
 
@@ -271,6 +277,8 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
 
   if (plug.isChild() && plug.parent().isLocked())
     return MS::kSuccess;
+
+  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
 
   // If the time values are changed, store the new values, and then update the transform
   if (plug == m_time || plug == m_timeOffset || plug == m_timeScalar)
@@ -356,14 +364,14 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
     if(data)
     {
       UsdPrim usdPrim = data->stage->GetPrimAtPath(primPath);
-      transform()->setPrim(usdPrim);
+      setPrim(usdPrim);
       outputBoolValue(dataBlock, m_pushToPrim, transform()->pushToPrimEnabled());
       outputBoolValue(dataBlock, m_readAnimatedValues, transform()->readAnimatedValues());
       updateTransform(dataBlock);
     }
     else
     {
-      transform()->setPrim(UsdPrim());
+      setPrim(UsdPrim());
       outputBoolValue(dataBlock, m_pushToPrim, transform()->pushToPrimEnabled());
       outputBoolValue(dataBlock, m_readAnimatedValues, transform()->readAnimatedValues());
     }

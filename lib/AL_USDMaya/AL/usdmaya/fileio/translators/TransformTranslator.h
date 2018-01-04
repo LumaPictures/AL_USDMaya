@@ -14,12 +14,12 @@
 // limitations under the License.
 //
 #pragma once
-#include "AL/usdmaya/TransformOperation.h"
 #include "AL/usdmaya/fileio/translators/DagNodeTranslator.h"
 
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
+#include "usdMaya/xformStack.h"
 
 #include <vector>
 
@@ -75,7 +75,7 @@ public:
   /// \param  conversionFactor a scaling that should be applied to the maya attributes to put them into the correct
   ///         units for USD
   /// \return true if the attribute is known to be animated, and the attribute/conversionFactor contain valid results
-  static bool getAnimationVariables(TransformOperation operation, MObject& attribute, double& conversionFactor);
+  static bool getAnimationVariables(const PxrUsdMayaXformOpClassification& operation, MObjectArray& attributes, double& conversionFactor);
 
 private:
   static MStatus processMetaData(const UsdPrim& from, MObject& to, const ImporterParams& params);
