@@ -32,25 +32,25 @@ TEST(ImportCommands, shear)
   constexpr double EPSILON = 1e-5;
   constexpr auto USDA_CONTENTS = R"ESC(#usda 1.0
 (
-defaultPrim = "top"
-endTimeCode = 1
-startTimeCode = 1
-upAxis = "Y"
+  defaultPrim = "top"
+  endTimeCode = 1
+  startTimeCode = 1
+  upAxis = "Y"
 )
 
 def Xform "top" {
-def Xform "shear_components"
-{
-float xformOp:rotateY = 90
-matrix4d xformOp:transform:shear = ( (1, 0, 0, 0), (0.25, 1, 0, 0), (0.5, 0.75, 1, 0), (0, 0, 0, 1) )
-uniform token[] xformOpOrder = ["xformOp:rotateY", "xformOp:transform:shear"]
-}
-
-def Xform "shear_matrix"
-{
-matrix4d xformOp:transform = ( (0.0, 0.0, -1.0, 0.0), (0.0, 1.0, -0.25, 0.0), (1.0, 0.75, -0.5, 0.0), (0.0, 0.0, 0.0, 1.0) )
-uniform token[] xformOpOrder = ["xformOp:transform"]
-}
+  def Xform "shear_components"
+  {
+    float xformOp:rotateY = 90
+    matrix4d xformOp:transform:shear = ( (1, 0, 0, 0), (0.25, 1, 0, 0), (0.5, 0.75, 1, 0), (0, 0, 0, 1) )
+    uniform token[] xformOpOrder = ["xformOp:rotateY", "xformOp:transform:shear"]
+  }
+  
+  def Xform "shear_matrix"
+  {
+    matrix4d xformOp:transform = ( (0.0, 0.0, -1.0, 0.0), (0.0, 1.0, -0.25, 0.0), (1.0, 0.75, -0.5, 0.0), (0.0, 0.0, 0.0, 1.0) )
+    uniform token[] xformOpOrder = ["xformOp:transform"]
+  }
 
 })ESC";
 
