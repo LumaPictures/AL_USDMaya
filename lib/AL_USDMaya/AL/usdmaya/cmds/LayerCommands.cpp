@@ -14,12 +14,14 @@
 // limitations under the License.
 //
 #include "AL/maya/CommandGuiHelper.h"
+#include "AL/maya/Common.h"
 #include "AL/usdmaya/StageCache.h"
 #include "AL/usdmaya/Utils.h"
 #include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/cmds/LayerCommands.h"
 #include "AL/usdmaya/nodes/LayerManager.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
+#include "AL/usdmaya/nodes/Transform.h"
 
 #include "maya/MArgDatabase.h"
 #include "maya/MDagPath.h"
@@ -36,6 +38,78 @@
 #include "pxr/usd/sdf/listOp.h"
 
 #include <sstream>
+
+namespace {
+  AL::usdmaya::nodes::ProxyShape* getProxyShapeFromSel(const MSelectionList& sl)
+  {
+    auto getShapePtr = [](const MObject& mobj, MFnDagNode& fnDag)
+        ->AL::usdmaya::nodes::ProxyShape*
+    {
+      if(mobj.hasFn(MFn::kPluginShape))
+      {
+        fnDag.setObject(mobj);
+        if(fnDag.typeId() == AL::usdmaya::nodes::ProxyShape::kTypeId)
+        {
+          return (AL::usdmaya::nodes::ProxyShape*)fnDag.userNode();
+        }
+      }
+      return nullptr;
+    };
+
+    AL::usdmaya::nodes::ProxyShape* foundShape = nullptr;
+
+    MDagPath path;
+    for(uint32_t i = 0; i < sl.length(); ++i)
+    {
+      MStatus status = sl.getDagPath(i, path);
+      if(!status) continue;
+
+      MFnDagNode fn(path);
+
+      if(path.node().hasFn(MFn::kTransform))
+      {
+        if(fn.typeId() == AL::usdmaya::nodes::Transform::kTypeId)
+        {
+          auto transform = (AL::usdmaya::nodes::Transform*)fn.userNode();
+          if(transform)
+          {
+            MPlug sourcePlug = transform->inStageDataPlug().source();
+            foundShape = getShapePtr(sourcePlug.node(), fn);
+            if (foundShape) return foundShape;
+          }
+          else
+          {
+            MGlobal::displayError(MString("Error getting Transform pointer for ")
+                + fn.partialPathName());
+            return nullptr;
+          }
+          // If we have an AL_usdmaya_ProxyShapeTransform, but it wasn't hooked
+          // up to a ProxyShape, just continue to the next selection item
+          continue;
+        }
+        else
+        {
+          // If it's a "normal" xform, search all shapes directly below
+          unsigned int numShapes;
+          AL_MAYA_CHECK_ERROR_RETURN_VAL(path.numberOfShapesDirectlyBelow(numShapes),
+              nullptr, "Error getting number of shapes beneath " + path.partialPathName());
+          for(unsigned int i = 0; i < numShapes; path.pop(), ++i)
+          {
+            path.extendToShapeDirectlyBelow(i);
+            foundShape = getShapePtr(path.node(), fn);
+            if(foundShape) return foundShape;
+          }
+        }
+      }
+      else
+      {
+        foundShape = getShapePtr(path.node(), fn);
+        if(foundShape) return foundShape;
+      }
+    }
+    return nullptr;
+  }
+}
 
 namespace AL {
 namespace usdmaya {
@@ -65,24 +139,9 @@ nodes::ProxyShape* LayerCommandBase::getShapeNode(const MArgDatabase& args)
   MSelectionList sl;
   args.getObjects(sl);
 
-  for(uint32_t i = 0; i < sl.length(); ++i)
-  {
-    MStatus status = sl.getDagPath(i, path);
+  nodes::ProxyShape* foundShape = getProxyShapeFromSel(sl);
+  if(foundShape) return foundShape;
 
-    if(path.node().hasFn(MFn::kTransform))
-    {
-      path.extendToShape();
-    }
-
-    if(path.node().hasFn(MFn::kPluginShape))
-    {
-      MFnDagNode fn(path);
-      if(fn.typeId() == nodes::ProxyShape::kTypeId)
-      {
-        return (nodes::ProxyShape*)fn.userNode();
-      }
-    }
-  }
   sl.clear();
 
   {
@@ -92,24 +151,8 @@ nodes::ProxyShape* LayerCommandBase::getShapeNode(const MArgDatabase& args)
       if(args.getFlagArgument("-p", 0, proxyName))
       {
         sl.add(proxyName);
-        if(sl.length())
-        {
-          MStatus status = sl.getDagPath(0, path);
-
-          if(path.node().hasFn(MFn::kTransform))
-          {
-            path.extendToShape();
-          }
-
-          if(path.node().hasFn(MFn::kPluginShape))
-          {
-            MFnDagNode fn(path);
-            if(fn.typeId() == nodes::ProxyShape::kTypeId)
-            {
-              return (nodes::ProxyShape*)fn.userNode();
-            }
-          }
-        }
+        foundShape = getProxyShapeFromSel(sl);
+        if(foundShape) return foundShape;
       }
       MGlobal::displayError("Invalid ProxyShape specified/selected with -p flag");
     }
@@ -566,10 +609,8 @@ MStatus LayerCurrentEditTarget::doIt(const MArgList& argList)
           layerName2 = getLayerId(next.GetLayer());
         }
         else
-        if(args.isFlagSet("-l"))
+        if(layerName.length() > 0)
         {
-          MString layerName;
-          args.getFlagArgument("-l", 0, layerName);
           layerName2 = convert(layerName);
           SdfLayerHandleVector layers = stage->GetUsedLayers();
           for(auto it = layers.begin(); it != layers.end(); ++it)
@@ -870,7 +911,7 @@ MStatus LayerSetMuted::redoIt()
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-MStringArray buildLayerList(const MString&)
+MStringArray buildEditedLayersList(const MString&)
 {
   MStringArray result;
   nodes::LayerManager* layerManager = nodes::LayerManager::findManager();
@@ -882,11 +923,42 @@ MStringArray buildLayerList(const MString&)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+MStringArray buildProxyLayersList(const MString&)
+{
+  MStringArray result;
+  MSelectionList sl;
+  AL_MAYA_CHECK_ERROR_RETURN_VAL(MGlobal::getActiveSelectionList(sl), result,
+      "Error building layer list");
+
+  nodes::ProxyShape* foundShape = getProxyShapeFromSel(sl);
+  if (!foundShape)
+  {
+    MGlobal::displayError("No proxy shape selected");
+    return result;
+  }
+
+  auto stage = foundShape->getUsdStage();
+  if (!stage)
+  {
+    MGlobal::displayError(MString("Proxy shape '") + foundShape->name() + "' had no usd stage");
+    return result;
+  }
+
+  auto usedLayers = stage->GetUsedLayers();
+
+  for(auto& layer : usedLayers)
+  {
+    result.append(layer->GetIdentifier().c_str());
+  }
+  return result;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 void constructLayerCommandGuis()
 {
   {
     maya::CommandGuiHelper saveLayer("AL_usdmaya_LayerSave", "Save Layer", "Save Layer", "USD/Layers/Save Layer", false);
-    saveLayer.addListOption("l", "Layer to Save", (AL::maya::GenerateListFn)buildLayerList, /*isMandatory=*/true);
+    saveLayer.addListOption("l", "Layer to Save", (AL::maya::GenerateListFn)buildEditedLayersList, /*isMandatory=*/true);
     saveLayer.addFilePathOption("f", "USD File Path", maya::CommandGuiHelper::kSave, "USDA files (*.usda) (*.usda);;USDC files (*.usdc) (*.usdc);;Alembic Files (*.abc) (*.abc);;All Files (*) (*)", maya::CommandGuiHelper::kStringMustHaveValue);
   }
 
@@ -897,7 +969,9 @@ void constructLayerCommandGuis()
 
   {
     maya::CommandGuiHelper setEditTarget("AL_usdmaya_LayerCurrentEditTarget", "Set Current Edit Target", "Set", "USD/Layers/Set Current Edit Target", false);
-    setEditTarget.addListOption("l", "USD Layer", (AL::maya::GenerateListFn)buildLayerList);
+    // we build our layer list using identifiers, so make sure the command is told to expect identifiers
+    setEditTarget.addExecuteText(" -fid ");
+    setEditTarget.addListOption("l", "USD Layer", (AL::maya::GenerateListFn)buildProxyLayersList);
   }
 }
 
