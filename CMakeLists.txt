@@ -15,6 +15,14 @@ list(APPEND CMAKE_MODULE_PATH
 find_package(USD REQUIRED)
 include(${USD_CONFIG_FILE})
 
+# allow for separate builds of usd/pxrUsdMaya
+if (USD_MAYA_INCLUDE_DIR AND NOT USD_MAYA_INCLUDE_DIR STREQUAL USD_INCLUDE_DIR)
+    include_directories(${USD_MAYA_INCLUDE_DIR})
+endif()
+if (USD_MAYA_LIBRARY_DIR AND NOT USD_MAYA_LIBRARY_DIR STREQUAL USD_LIBRARY_DIR)
+    link_directories(${USD_MAYA_LIBRARY_DIR})
+endif()
+
 # to get PYTHON_EXECUTABLE
 find_package(PythonInterp)
 
