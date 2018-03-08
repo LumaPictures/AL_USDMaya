@@ -18,7 +18,6 @@
 #include "AL/usdmaya/fileio/ExportTranslator.h"
 #include "AL/usdmaya/fileio/NodeFactory.h"
 #include "AL/usdmaya/fileio/translators/TransformTranslator.h"
-#include "AL/usdmaya/TransformOperation.h"
 #include "AL/usdmaya/Metadata.h"
 
 #include "maya/MAnimControl.h"
@@ -471,8 +470,7 @@ void Export::exportGeometryConstraint(MDagPath constraintPath, const SdfPath& us
           std::vector<UsdGeomXformOp> ops = xform.GetOrderedXformOps(&reset);
           for(auto op : ops)
           {
-            const TransformOperation thisOp = xformOpToEnum(op.GetBaseName());
-            if(thisOp == kTranslate)
+            if(op.GetOpType() == UsdGeomXformOp::TypeTranslate)
             {
               animTranslator->forceAddPlug(MPlug(constraintPath.node(), g_transform_translateAttr), op.GetAttr());
               break;
