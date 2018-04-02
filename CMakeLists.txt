@@ -42,8 +42,11 @@ include_directories(${PXR_INCLUDE_DIRS})
 find_package(Boost COMPONENTS
                 python
                 thread
+                filesystem
                 REQUIRED
 )
+
+set(NEED_BOOST_FILESYSTEM ON)
 
 set(CMAKE_CXX_FLAGS
     -std=c++11
