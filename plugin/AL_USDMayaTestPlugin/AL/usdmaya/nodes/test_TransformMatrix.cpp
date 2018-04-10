@@ -1581,9 +1581,11 @@ TEST(Transform, splitPivot)
     }
 
     // Select the xform, to make it in maya
-    MString cmd = MString("AL_usdmaya_ProxyShapeSelect -primPath \"")
+    // use "-r" to insulate from previous tests, as default is append
+    MString cmd = MString("AL_usdmaya_ProxyShapeSelect -r -primPath \"")
         + xformPath.GetText() + "\" -proxy \"" + proxyShapeMayaPath + "\"";
     MGlobal::executeCommand(cmd);
+
 
     MSelectionList sel;
     EXPECT_TRUE(MGlobal::getActiveSelectionList(sel));
