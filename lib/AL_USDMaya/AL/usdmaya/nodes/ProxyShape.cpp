@@ -824,20 +824,32 @@ void ProxyShape::trackEditTargetLayer(LayerManager* layerManager)
 
   TF_DEBUG(ALUSDMAYA_LAYERS).Msg(" - curr target layer: %s\n", currTargetLayer->GetIdentifier().c_str());
 
-  if(!layerManager)
+  if (m_prevEditTarget != currTargetLayer)
   {
-    layerManager = LayerManager::findOrCreateManager();
-    // findOrCreateManager SHOULD always return a result, but we check anyway,
-    // to avoid any potential crash...
     if(!layerManager)
     {
-      std::cerr << "Error creating / finding a layerManager node!" << std::endl;
-      return;
+      layerManager = LayerManager::findOrCreateManager();
+      // findOrCreateManager SHOULD always return a result, but we check anyway,
+      // to avoid any potential crash...
+      if(!layerManager)
+      {
+        std::cerr << "Error creating / finding a layerManager node!" << std::endl;
+        return;
+      }
     }
-  }
-  layerManager->addLayer(currTargetLayer);
 
-  triggerEvent("EditTargetChanged");
+    if (m_prevEditTarget && !m_prevEditTarget->IsDirty())
+    {
+      // If the old edit target still isn't dirty, and we're switching to a new
+      // edit target, we can remove it from the layer manager
+      layerManager->removeLayer(m_prevEditTarget);
+    }
+
+    layerManager->addLayer(currTargetLayer);
+    m_prevEditTarget = currTargetLayer;
+
+    triggerEvent("EditTargetChanged");
+  }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

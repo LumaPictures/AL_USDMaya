@@ -982,6 +982,7 @@ private:
   fileio::translators::TranslatorManufacture m_translatorManufacture;
   SdfPath m_changedPath;
   SdfPathVector m_variantSwitchedPrims;
+  SdfLayerHandle m_prevEditTarget;
   UsdImagingGLHdEngine* m_engine = 0;
 
   uint32_t m_engineRefCount = 0;
