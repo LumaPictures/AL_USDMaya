@@ -156,19 +156,15 @@ bool LayerDatabase::removeLayer(SdfLayerRefPtr layer)
   return true;
 }
 
-SdfLayerHandle LayerDatabase::findLayer(std::string identifier, bool dirtyOnly) const
+SdfLayerHandle LayerDatabase::findLayer(std::string identifier) const
 {
   auto foundIdAndLayer = m_idToLayer.find(identifier);
   if(foundIdAndLayer != m_idToLayer.end())
   {
-    if(dirtyOnly)
-    {
-      if(foundIdAndLayer->second->IsDirty())
-      {
-        return foundIdAndLayer->second;
-      }
-    }
-    else
+    // Non-dirty layers may be placed in the database "temporarily" -
+    // ie, current edit targets for proxyShape stages, that have not
+    // yet been edited. Filter those out.
+    if(foundIdAndLayer->second->IsDirty())
     {
       return foundIdAndLayer->second;
     }
@@ -176,6 +172,7 @@ SdfLayerHandle LayerDatabase::findLayer(std::string identifier, bool dirtyOnly) 
 
   return SdfLayerHandle();
 }
+
 
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -395,10 +392,10 @@ bool LayerManager::removeLayer(SdfLayerHandle layer)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-SdfLayerHandle LayerManager::findLayer(std::string identifier, bool dirtyOnly)
+SdfLayerHandle LayerManager::findLayer(std::string identifier)
 {
   boost::shared_lock_guard<boost::shared_mutex> lock(m_layersMutex);
-  return m_layerDatabase.findLayer(identifier, dirtyOnly);
+  return m_layerDatabase.findLayer(identifier);
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -436,18 +433,15 @@ MStatus LayerManager::populateSerialisationAttributes()
     for (const auto& layerAndIds : m_layerDatabase)
     {
       auto& layer = layerAndIds.first;
-      if(layer->IsDirty())
-      {
-        MDataHandle layersElemHandle = builder.addLast(&status);
-        AL_MAYA_CHECK_ERROR(status, errorString);
-        MDataHandle idHandle = layersElemHandle.child(m_identifier);
-        idHandle.setString(AL::maya::utils::convert(layer->GetIdentifier()));
-        MDataHandle serializedHandle = layersElemHandle.child(m_serialized);
-        layer->ExportToString(&temp);
-        serializedHandle.setString(AL::maya::utils::convert(temp));
-        MDataHandle anonHandle = layersElemHandle.child(m_anonymous);
-        anonHandle.setBool(layer->IsAnonymous());
-      }
+      MDataHandle layersElemHandle = builder.addLast(&status);
+      AL_MAYA_CHECK_ERROR(status, errorString);
+      MDataHandle idHandle = layersElemHandle.child(m_identifier);
+      idHandle.setString(AL::maya::utils::convert(layer->GetIdentifier()));
+      MDataHandle serializedHandle = layersElemHandle.child(m_serialized);
+      layer->ExportToString(&temp);
+      serializedHandle.setString(AL::maya::utils::convert(temp));
+      MDataHandle anonHandle = layersElemHandle.child(m_anonymous);
+      anonHandle.setBool(layer->IsAnonymous());
     }
     AL_MAYA_CHECK_ERROR(layersArrayHandle.set(builder), errorString);
   }
