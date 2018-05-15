@@ -49,19 +49,19 @@ public:
     m_iter(it),
     m_end(end)
   {
-    _SetToNextDirty();
+    setToNextDirty();
   }
 
   DirtyOnlyIterator(const DirtyOnlyIterator& other):
     m_iter(other.m_iter),
     m_end(other.m_end)
   {
-    _SetToNextDirty();
+    setToNextDirty();
   }
 
   DirtyOnlyIterator& operator++() {
     ++m_iter;
-    _SetToNextDirty();
+    setToNextDirty
     return *this;
   }
 
@@ -85,7 +85,7 @@ public:
   value_type& operator*() { return *m_iter; }
 
 private:
-  void _SetToNextDirty()
+  void setToNextDirty()
   {
     while (m_iter != m_end && !m_iter->first->IsDirty())
     {
