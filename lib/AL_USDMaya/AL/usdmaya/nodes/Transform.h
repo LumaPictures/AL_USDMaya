@@ -22,6 +22,7 @@
 #include "maya/MObjectHandle.h"
 #include "maya/MPxTransform.h"
 
+PXR_NAMESPACE_USING_DIRECTIVE
 
 namespace AL {
 namespace usdmaya {
