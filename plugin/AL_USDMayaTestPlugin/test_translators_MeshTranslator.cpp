@@ -197,7 +197,7 @@ TEST(translators_MeshTranslator, constantUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->constant, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -228,7 +228,7 @@ TEST(translators_MeshTranslator, constantUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->constant, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -272,7 +272,7 @@ TEST(translators_MeshTranslator, vertexUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->vertex, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -309,7 +309,7 @@ TEST(translators_MeshTranslator, vertexUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->vertex, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -381,7 +381,7 @@ TEST(translators_MeshTranslator, faceVaryingUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->faceVarying, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -426,7 +426,7 @@ TEST(translators_MeshTranslator, faceVaryingUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->faceVarying, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -498,7 +498,7 @@ TEST(translators_MeshTranslator, uniformUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->uniform, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -536,7 +536,7 @@ TEST(translators_MeshTranslator, uniformUvExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultUvSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->uniform, pvar.GetInterpolation());
 
     VtArray<GfVec2f> received;
@@ -609,7 +609,7 @@ TEST(translators_MeshTranslator, constantColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->constant, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -644,7 +644,7 @@ TEST(translators_MeshTranslator, constantColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->constant, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -705,7 +705,7 @@ TEST(translators_MeshTranslator, vertexColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->vertex, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -744,7 +744,7 @@ TEST(translators_MeshTranslator, vertexColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->vertex, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -812,7 +812,7 @@ TEST(translators_MeshTranslator, uniformColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->uniform, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -851,7 +851,7 @@ TEST(translators_MeshTranslator, uniformColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->uniform, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -916,7 +916,7 @@ TEST(translators_MeshTranslator, faceVaryingColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->faceVarying, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
@@ -955,7 +955,7 @@ TEST(translators_MeshTranslator, faceVaryingColourExport)
 
     UsdGeomMesh mesh(prim);
     auto pvar = getDefaultColourSet(mesh);
-    ASSERT_TRUE(pvar);
+    ASSERT_TRUE(bool(pvar));
     EXPECT_EQ(UsdGeomTokens->faceVarying, pvar.GetInterpolation());
 
     VtArray<GfVec4f> received;
