@@ -238,6 +238,7 @@ MObject ProxyShape::m_transformScale = MObject::kNullObj;
 MObject ProxyShape::m_stageDataDirty = MObject::kNullObj;
 MObject ProxyShape::m_stageCacheId = MObject::kNullObj;
 MObject ProxyShape::m_assetResolverConfig = MObject::kNullObj;
+MObject ProxyShape::m_pauseUpdates = MObject::kNullObj;
 
 //----------------------------------------------------------------------------------------------------------------------
 std::vector<MObjectHandle> ProxyShape::m_unloadedProxyShapes;
@@ -810,6 +811,7 @@ MStatus ProxyShape::initialise()
     m_transformScale = nc.attribute("s");
 
     m_stageDataDirty = addBoolAttr("stageDataDirty", "sdd", false, kWritable | kAffectsAppearance | kInternal);
+    m_pauseUpdates = addBoolAttr("pauseUpdates", "pu", false, kReadable | kWritable | kConnectable | kAffectsAppearance | kInternal);
 
     m_stageCacheId = addInt32Attr("stageCacheId", "stcid", -1, kCached | kConnectable | kReadable  );
 
@@ -824,6 +826,7 @@ MStatus ProxyShape::initialise()
     AL_MAYA_CHECK_ERROR(attributeAffects(m_populationMaskIncludePaths, m_outStageData), errorString);
     AL_MAYA_CHECK_ERROR(attributeAffects(m_stageDataDirty, m_outStageData), errorString);
     AL_MAYA_CHECK_ERROR(attributeAffects(m_assetResolverConfig, m_outStageData), errorString);
+    AL_MAYA_CHECK_ERROR(attributeAffects(m_pauseUpdates, m_outStageData), errorString);
   }
   catch (const MStatus& status)
   {
@@ -1024,7 +1027,7 @@ void ProxyShape::serializeAll()
 //----------------------------------------------------------------------------------------------------------------------
 void ProxyShape::onObjectsChanged(UsdNotice::ObjectsChanged const& notice, UsdStageWeakPtr const& sender)
 {
-  if(MFileIO::isReadingFile())
+  if(m_ignoringUpdates || MFileIO::isReadingFile())
     return;
 
   if (!sender || sender != m_stage)
@@ -1244,7 +1247,7 @@ void ProxyShape::variantSelectionListener(SdfNotice::LayersDidChange const& noti
 // selection change happened.  If so, we trigger a ProxyShapePostLoadProcess() which will regenerate the alTransform
 // nodes based on the contents of the new variant selection.
 {
-  if(MFileIO::isReadingFile())
+  if(m_ignoringUpdates || MFileIO::isReadingFile())
   {
     return;
   }
@@ -1845,6 +1848,11 @@ MStatus ProxyShape::compute(const MPlug& plug, MDataBlock& dataBlock)
     }
     return status == MS::kSuccess ? computeOutStageData(plug, dataBlock) : status;
   }
+  else
+  if(plug == m_pauseUpdates)
+  {
+    return outputBoolValue(dataBlock, m_pauseUpdates, m_ignoringUpdates);
+  }
   return MPxSurfaceShape::compute(plug, dataBlock);
 }
 
@@ -1861,6 +1869,8 @@ bool ProxyShape::setInternalValue(const MPlug& plug, const MDataHandle& dataHand
   // Delay stage creation if opening a file, because we haven't created the LayerManager node yet
   if(plug == m_filePath || plug == m_assetResolverConfig)
   {
+    // TODO: make m_filePath updates respect m_ignoringUpdates
+
     // can't use dataHandle.datablock(), as this is a temporary datahandle
     MDataBlock datablock = forceCache();
     AL_MAYA_CHECK_ERROR_RETURN_VAL(outputStringValue(datablock, m_filePath, dataHandle.asString()),
@@ -1879,6 +1889,8 @@ bool ProxyShape::setInternalValue(const MPlug& plug, const MDataHandle& dataHand
   else
   if(plug == m_primPath)
   {
+    // TODO: make m_primPath updates respect m_ignoringUpdates
+
     // can't use dataHandle.datablock(), as this is a temporary datahandle
     MDataBlock datablock = forceCache();
     AL_MAYA_CHECK_ERROR_RETURN_VAL(outputStringValue(datablock, m_primPath, dataHandle.asString()),
@@ -1918,6 +1930,17 @@ bool ProxyShape::setInternalValue(const MPlug& plug, const MDataHandle& dataHand
     {
       constructExcludedPrims();
     }
+  }
+  else
+  if(plug == m_pauseUpdates)
+  {
+    bool oldIgnoring = m_ignoringUpdates;
+    m_ignoringUpdates = dataHandle.asBool();
+    if(!m_ignoringUpdates && oldIgnoring)
+    {
+      // If we've turned off ignoring updates, we need to do a resync
+      resync(m_path);
+    }
     return true;
   }
   return false;
@@ -1926,7 +1949,11 @@ bool ProxyShape::setInternalValue(const MPlug& plug, const MDataHandle& dataHand
 //----------------------------------------------------------------------------------------------------------------------
 bool ProxyShape::getInternalValue(const MPlug& plug, MDataHandle& dataHandle)
 {
-  // Not sure if this is needed... don't know behavior of default implementation?
+  if(plug == m_pauseUpdates)
+  {
+    dataHandle.set(m_ignoringUpdates);
+    return true;
+  }
   return false;
 }
 
