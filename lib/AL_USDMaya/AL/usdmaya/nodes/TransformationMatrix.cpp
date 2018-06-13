@@ -1817,9 +1817,18 @@ void TransformationMatrix::pushToPrim()
         MFnDependencyNode proxyMfn(proxyObj);
         if (proxyMfn.typeId() == ProxyShape::kTypeId)
         {
-          ProxyShape* proxy = static_cast<ProxyShape*>(proxyMfn.userNode());
-          proxy->clearBoundingBoxCache();
-          MHWRender::MRenderer::setGeometryDrawDirty(proxyObj);
+          // We check that the matrix actually HAS changed, as this function will be
+          // called when, ie, pushToPrim is toggled, which often happens on node
+          // creation, when nothing has actually changed
+          GfMatrix4d newMatrix;
+          bool newResetsStack;
+          m_xform.GetLocalTransformation(&newMatrix, &newResetsStack, getTimeCode());
+          if (newMatrix != oldMatrix || newResetsStack != oldResetsStack)
+          {
+            ProxyShape* proxy = static_cast<ProxyShape*>(proxyMfn.userNode());
+            proxy->clearBoundingBoxCache();
+            MHWRender::MRenderer::setGeometryDrawDirty(proxyObj);
+          }
         }
       }
     }
