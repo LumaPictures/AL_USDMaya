@@ -1958,16 +1958,20 @@ MBoundingBox ProxyShape::boundingBox() const
   // If we could cheaply determine whether a stage only has static geometry,
   // we could make this value a constant one for that case, avoiding the
   // memory overhead of a cache entry per frame
-  UsdTimeCode currTime = UsdTimeCode(inputDoubleValue(dataBlock, m_outTime));
+  UsdTimeCode currTime = UsdTimeCode(inputTimeValue(dataBlock, m_outTime).value());
 
   // RB: There must be a nicer way of doing this that avoids the map?
   // The time codes are likely to be ranged, so an ordered array + binary search would surely work?
   std::map<UsdTimeCode, MBoundingBox>::const_iterator cacheLookup = m_boundingBoxCache.find(currTime);
   if (cacheLookup != m_boundingBoxCache.end())
   {
+    TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Using cached bounding box: time %f\n",
+        currTime.GetValue());
     return cacheLookup->second;
   }
 
+  TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Using re-calculated bounding box: time %f\n",
+      currTime.GetValue());
   GfBBox3d allBox;
   UsdPrim prim = getUsdPrim(dataBlock);
   if (prim)

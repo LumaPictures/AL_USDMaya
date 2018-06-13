@@ -24,6 +24,7 @@
 #include "AL/event/EventHandler.h"
 #include "AL/maya/event/MayaEventManager.h"
 #include <AL/usdmaya/SelectabilityDB.h>
+#include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/DrivenTransformsData.h"
 #include "AL/usdmaya/fileio/translators/TranslatorBase.h"
 #include "AL/usdmaya/fileio/translators/TranslatorContext.h"
@@ -867,7 +868,10 @@ public:
 
   /// \brief  Clears the bounding box cache of the shape
   inline void clearBoundingBoxCache()
-    { m_boundingBoxCache.clear(); }
+  {
+    m_boundingBoxCache.clear();
+    TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Clearing bounding box cache\n");
+  }
 
 private:
 
