@@ -1298,7 +1298,7 @@ void ProxyShape::loadStage()
     trackEditTargetLayer();
   }
   m_stage = UsdStageRefPtr();
-  m_boundingBoxCache.clear();
+  clearBoundingBoxCache();
 
   // Get input attr values
   const MString file = inputStringValue(dataBlock, m_filePath);

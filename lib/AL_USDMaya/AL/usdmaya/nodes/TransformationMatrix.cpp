@@ -1801,9 +1801,8 @@ void TransformationMatrix::pushToPrim()
     }
   }
 
-
   // Anytime we update the xform, we need to tell the proxy shape that it
-  // needs to redraw itself
+  // needs to update it's bounding box cache and redraw itself
   MObject tn(m_transformNode.object());
   if (!tn.isNull())
   {
@@ -1818,16 +1817,9 @@ void TransformationMatrix::pushToPrim()
         MFnDependencyNode proxyMfn(proxyObj);
         if (proxyMfn.typeId() == ProxyShape::kTypeId)
         {
-          // We check that the matrix actually HAS changed, as this function will be
-          // called when, ie, pushToPrim is toggled, which often happens on node
-          // creation, when nothing has actually changed
-          GfMatrix4d newMatrix;
-          bool newResetsStack;
-          m_xform.GetLocalTransformation(&newMatrix, &newResetsStack, getTimeCode());
-          if (newMatrix != oldMatrix || newResetsStack != oldResetsStack)
-          {
-            MHWRender::MRenderer::setGeometryDrawDirty(proxyObj);
-          }
+          ProxyShape* proxy = static_cast<ProxyShape*>(proxyMfn.userNode());
+          proxy->clearBoundingBoxCache();
+          MHWRender::MRenderer::setGeometryDrawDirty(proxyObj);
         }
       }
     }
