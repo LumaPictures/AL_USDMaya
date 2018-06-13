@@ -1139,7 +1139,56 @@ TEST(ProxyShape, destroyTransformReferences)
 // MBoundingBox boundingBox() const override;
 TEST(ProxyShape, boundingBox)
 {
-  AL_USDMAYA_UNTESTED;
+  AL::usdmaya::nodes::ProxyShape* proxyShape = SetupProxyShapeWithXformedMesh();
+
+  // Initially, with all xforms, the bbox should be offset
+  MFnDagNode mfnDag(proxyShape->thisMObject());
+
+  MBoundingBox bbox = mfnDag.boundingBox();
+  ASSERT_NEAR(bbox.min().x, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().x, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().y, 2.5, 1e-5);
+  ASSERT_NEAR(bbox.max().y, 3.5, 1e-5);
+  ASSERT_NEAR(bbox.min().z, 3.5, 1e-5);
+  ASSERT_NEAR(bbox.max().z, 4.5, 1e-5);
+
+  // Then if we set a primPath, it should be shifted so that the root xform
+  // has an identity xform...
+  MPlug primPathPlug = proxyShape->primPathPlug();
+  primPathPlug.setString("/world/subxform");
+
+  bbox = mfnDag.boundingBox();
+  ASSERT_NEAR(bbox.min().x, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().x, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().y, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().y, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().z, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().z, .5, 1e-5);
+
+  // Now make the xforms...
+  MGlobal::executeCommand(
+      MString("AL_usdmaya_ProxyShapeImportAllTransforms -pushToPrim 1 ")
+      + proxyShape->name());
+
+  // confirm nothing changed...
+  bbox = mfnDag.boundingBox();
+  ASSERT_NEAR(bbox.min().x, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().x, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().y, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().y, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().z, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().z, .5, 1e-5);
+
+  // Then move a transform, and make sure we've updated appropriately!
+  MGlobal::executeCommand("setAttr theCube.tx 2");
+  proxyShape->clearBoundingBoxCache();
+  bbox = mfnDag.boundingBox();
+  ASSERT_NEAR(bbox.min().x, 1.5, 1e-5);
+  ASSERT_NEAR(bbox.max().x, 2.5, 1e-5);
+  ASSERT_NEAR(bbox.min().y, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().y, .5, 1e-5);
+  ASSERT_NEAR(bbox.min().z, -.5, 1e-5);
+  ASSERT_NEAR(bbox.max().z, .5, 1e-5);
 }
 
 // std::vector<UsdPrim> huntForNativeNodesUnderPrim(const MDagPath& proxyTransformPath, SdfPath startPath);
