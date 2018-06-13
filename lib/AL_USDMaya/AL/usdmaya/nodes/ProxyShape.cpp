@@ -2154,9 +2154,13 @@ MBoundingBox ProxyShape::boundingBox() const
   std::map<UsdTimeCode, MBoundingBox>::const_iterator cacheLookup = m_boundingBoxCache.find(currTime);
   if (cacheLookup != m_boundingBoxCache.end())
   {
+    TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Using cached bounding box: time %f\n",
+        currTime.GetValue());
     return cacheLookup->second;
   }
 
+  TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Using re-calculated bounding box: time %f\n",
+      currTime.GetValue());
   GfBBox3d allBox;
   UsdPrim prim = getUsdPrim(dataBlock);
   if (prim)
