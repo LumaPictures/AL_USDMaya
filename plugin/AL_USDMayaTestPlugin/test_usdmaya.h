@@ -40,3 +40,6 @@ AL::usdmaya::nodes::ProxyShape* SetupProxyShapeWithMesh();
 /// \return AL::usdmaya::nodes::ProxyShape
 extern AL::usdmaya::nodes::ProxyShape* SetupProxyShapeWithMultipleMeshes();
 
+/// \brief  Creates a ProxyShape with a cube mesh that has multiple (modified) xforms above it
+/// \return AL::usdmaya::nodes::ProxyShape
+extern AL::usdmaya::nodes::ProxyShape* SetupProxyShapeWithXformedMesh();

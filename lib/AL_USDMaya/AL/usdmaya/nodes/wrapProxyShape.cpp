@@ -414,6 +414,7 @@ void wrapProxyShape()
         (boost::python::arg("usdPrim"),
          boost::python::arg("reason")=ProxyShape::kRequested))
     .def("destroyTransformReferences", &ProxyShape::destroyTransformReferences)
+    .def("clearBoundingBoxCache", &ProxyShape::clearBoundingBoxCache)
     ;
 
     // Decided NOT to register this using boost::python::to_python_converter,
