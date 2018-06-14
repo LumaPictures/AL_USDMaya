@@ -790,8 +790,8 @@ MStatus ProxyShape::initialise()
     m_complexity = addInt32Attr("complexity", "cplx", 0, kCached | kConnectable | kReadable | kWritable | kAffectsAppearance | kKeyable | kStorable);
     setMinMax(m_complexity, 0, 8, 0, 4);
     m_outStageData = addDataAttr("outStageData", "od", StageData::kTypeId, kConnectable | kReadable | kWritable | kAffectsAppearance);
-    m_displayGuides = addBoolAttr("displayGuides", "dg", false, kCached | kKeyable | kWritable | kAffectsAppearance | kStorable);
-    m_displayRenderGuides = addBoolAttr("displayRenderGuides", "drg", false, kCached | kKeyable | kWritable | kAffectsAppearance | kStorable);
+    m_displayGuides = addBoolAttr("displayGuides", "dg", false, kCached | kKeyable | kWritable | kAffectsAppearance | kStorable | kInternal);
+    m_displayRenderGuides = addBoolAttr("displayRenderGuides", "drg", false, kCached | kKeyable | kWritable | kAffectsAppearance | kStorable | kInternal);
     m_unloaded = addBoolAttr("unloaded", "ul", false, kCached | kKeyable | kWritable | kAffectsAppearance | kStorable);
     m_serializedTrCtx = addStringAttr("serializedTrCtx", "srtc", kReadable|kWritable|kStorable|kHidden);
 
@@ -2113,6 +2113,14 @@ bool ProxyShape::setInternalValue(const MPlug& plug, const MDataHandle& dataHand
       constructExcludedPrims();
     }
     return true;
+  }
+  else
+  if(plug == m_displayGuides || plug == m_displayRenderGuides)
+  {
+    clearBoundingBoxCache();
+    // clearBoundingBoxCache doesn't read any plugs, so we can just return
+    // false, and rely on "normal" plug-setting behavior
+    return false;
   }
   return false;
 }
