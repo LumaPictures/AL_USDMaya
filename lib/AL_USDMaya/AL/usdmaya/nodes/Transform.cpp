@@ -297,7 +297,7 @@ void Transform::updateTransform(MDataBlock& dataBlock)
 //----------------------------------------------------------------------------------------------------------------------
 MBoundingBox Transform::boundingBox() const
 {
-  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::boundingBox\n");
+  TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Transform::boundingBox\n");
   MTime theTime;
   outTimePlug().getValue(theTime);
   UsdTimeCode usdTime(theTime.as(MTime::uiUnit()));
