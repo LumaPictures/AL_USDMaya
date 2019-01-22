@@ -65,10 +65,6 @@ kNotGatewayNodePath = 'Tail of path %s is not a gateway node.'
 # Type of the Maya shape node at the root of a USD hierarchy.
 kMayaUsdGatewayNodeType = 'AL_usdmaya_ProxyShape'
 
-# The normal Maya hierarchy handler, which we decorate for ProxyShape support.
-# Keep a reference to it to restore on finalization.
-mayaHierarchyHandler = None
-
 # FIXME Python binding lifescope.
 #
 # In code where we return a Python object to C++ code, if we don't keep a
@@ -874,8 +870,9 @@ def initialize():
 
 def finalize():
     # Restore the normal Maya hierarchy handler, and unregister.
-    global mayaHierarchyHandler
-    ufe.RunTimeMgr.instance().setHierarchyHandler(mayaRtid, mayaHierarchyHandler)
+    currentMayaHandler = ufe.RunTimeMgr.instance().hierarchyHandler(mayaRtid)
+    if isinstance(currentMayaHandler, ProxyShapeHierarchyHandler):
+        ufe.RunTimeMgr.instance().setHierarchyHandler(
+            mayaRtid, currentMayaHandler._mayaHierarchyHandler)
     ufe.RunTimeMgr.instance().unregister(USDRtid)
-    mayaHierarchyHandler = None
     stageCache.clear()
