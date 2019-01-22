@@ -172,7 +172,7 @@ class _StageCache(object):
             return dagPath
 
     def pathForStage(self, stage):
-        '''Return the AL_usdmaya_ProxyShape node UFE path for the argument 
+        '''Return the AL_usdmaya_ProxyShape node UFE path for the argument
         stage.
 
         Parameters
@@ -414,7 +414,7 @@ class UsdRootChildHierarchy(UsdHierarchy):
         # for that path.
         parentPath = self._path.pop()
         assert parentPath.runTimeId() == mayaRtid, kNotGatewayNodePath % str(path)
-        
+
         mayaHierarchyHandler = ufe.RunTimeMgr.instance().hierarchyHandler(mayaRtid)
         return mayaHierarchyHandler.createItem(parentPath)
 
@@ -463,7 +463,7 @@ class ProxyShapeHierarchy(ufe.Hierarchy):
         if self._usdRootPrim is None:
             stage = getStage(self._item.path())
             if stage:
-                self._usdRootPrim = stage.GetPrimAtPath('/')      
+                self._usdRootPrim = stage.GetPrimAtPath('/')
         return self._usdRootPrim
 
     def hasChildren(self):
@@ -527,14 +527,14 @@ class ProxyShapeHierarchyHandler(ufe.HierarchyHandler):
 class UsdTransform3d(ufe.Transform3d):
     def __init__(self):
         super(UsdTransform3d, self).__init__()
-    
+
     def setItem(self, item):
         self._path = item.path()
         self._item = item
-        
+
     def sceneItem(self):
         return self._item
-  
+
     def path(self):
         return self._path
 
@@ -543,7 +543,7 @@ class UsdTransform3d(ufe.Transform3d):
 
     def translate(self, x, y, z):
         usdXformOpCmds.translateOp(self.prim(), self._path, x, y, z)
-        
+
     def translation(self):
         x, y, z = (0, 0, 0)
         if self.prim().HasAttribute('xformOp:translate'):
@@ -560,25 +560,25 @@ class UsdTransform3d(ufe.Transform3d):
     _MAX_MEMENTOS = 10000
     mementos = deque(maxlen=_MAX_MEMENTOS)
 
-        
+
     def translateCmd(self):
         # FIXME Python binding lifescope.  Must keep command object alive.
         translateCmd = usdXformOpCmds.UsdTranslateUndoableCommand(self.prim(), self._path, self._item)
         UsdTransform3d.mementos.append(translateCmd)
         return translateCmd
-    
+
     def rotate(self, x, y, z):
         usdXformOpCmds.rotateOp(self.prim(), self._path, x, y, z)
-        
+
     def rotateCmd(self):
         # FIXME Python binding lifescope.  Must keep command object alive.
         rotateCmd = usdXformOpCmds.UsdRotateUndoableCommand(self.prim(), self._path, self._item)
         UsdTransform3d.mementos.append(rotateCmd)
         return rotateCmd
-        
+
     def scale(self, x, y, z):
         usdXformOpCmds.scaleOp(self.prim(), self._path, x, y, z)
-        
+
     def scaleCmd(self):
         # FIXME Python binding lifescope.  Must keep command object alive.
         scaleCmd = usdXformOpCmds.UsdScaleUndoableCommand(self.prim(), self._path, self._item)
@@ -587,7 +587,7 @@ class UsdTransform3d(ufe.Transform3d):
 
     def rotatePivotTranslate(self, x, y, z):
         usdXformOpCmds.rotatePivotTranslateOp(self.prim(), self._path, x, y, z)
-        
+
     def rotatePivotTranslateCmd(self):
         # FIXME Python binding lifescope.  Must keep command object alive.
         translateCmd = usdXformOpCmds.UsdRotatePivotTranslateUndoableCommand(self.prim(), self._path, self._item)
@@ -602,17 +602,17 @@ class UsdTransform3d(ufe.Transform3d):
             if v is not None:
                 x, y, z = v
         return ufe.Vector3d(x, y, z)
-        
+
     def scalePivot(self):
         return self.rotatePivot()
-        
+
     def scalePivotTranslate(self, x, y, z):
         return self.rotatePivotTranslate(x, y, z)
 
 
     def segmentInclusiveMatrix(self):
         return usdXformOpCmds.primToUfeXform(self.prim())
-        
+
     def segmentExclusiveMatrix(self):
         return usdXformOpCmds.primToUfeExclusiveXform(self.prim())
 

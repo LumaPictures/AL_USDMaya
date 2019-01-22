@@ -68,7 +68,7 @@ def initializePlugin(mobject):
 
     for cmd in commands:
         try:
-            mplugin.registerCommand(cmd.kCmdName, cmd.creator) 
+            mplugin.registerCommand(cmd.kCmdName, cmd.creator)
         except:
             OpenMaya.MGlobal.displayError('Register failed for %s' % cmd.kCmdName)
 
@@ -78,6 +78,6 @@ def uninitializePlugin(mobject):
 
     for cmd in commands:
         try:
-            mplugin.deregisterCommand(cmd.kCmdName) 
+            mplugin.deregisterCommand(cmd.kCmdName)
         except:
             OpenMaya.MGlobal.displayError('Unregister failed for %s' % cmd.kCmdName)

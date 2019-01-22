@@ -103,7 +103,7 @@ class SelectAppendCmd(SelectCmdBase):
 
     This command is a private implementation detail of this module and should
     not be called otherwise."""
-    
+
     kCmdName = 'ufeSelectAppend'
 
     # Command data.  Must be set before creating an instance of the command
@@ -162,7 +162,7 @@ class SelectRemoveCmd(SelectCmdBase):
 
     This command is a private implementation detail of this module and should
     not be called otherwise."""
-    
+
     kCmdName = 'ufeSelectRemove'
 
     # Command data.  Must be set before creating an instance of the command
@@ -226,7 +226,7 @@ class SelectClearCmd(SelectCmdBase):
 
     This command is a private implementation detail of this module and should
     not be called otherwise."""
-    
+
     kCmdName = 'ufeSelectClear'
 
     @staticmethod
@@ -258,7 +258,7 @@ class SelectReplaceWithCmd(SelectCmdBase):
 
     This command is a private implementation detail of this module and should
     not be called otherwise."""
-    
+
     kCmdName = 'ufeSelectReplaceWith'
 
     # Command data.  Must be set before creating an instance of the command

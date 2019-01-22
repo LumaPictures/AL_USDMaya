@@ -29,8 +29,8 @@ try:
 except:
     print "Unable to load ufe - Make sure the ufe path is added to PYTHONPATH"
     raise
-    
-    
+
+
 from ufeScripts import usdRunTime
 from ufeScripts import usdSubject
 import sys
@@ -53,5 +53,5 @@ def uninitializePlugin(obj):
     usdSubject.finalize()
     del sys.modules['usdRunTime']
     del sys.modules['usdSubject']
-    
+
 

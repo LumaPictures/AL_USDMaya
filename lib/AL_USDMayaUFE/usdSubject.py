@@ -111,11 +111,11 @@ class _StagesSubject(object):
         self._nodeCbIds = {}
         cbArgs = [(OpenMaya.MSceneMessage.kBeforeNew, self._beforeNewCb,
                    'before new'),
-                  (OpenMaya.MSceneMessage.kBeforeOpen, self._beforeOpenCb, 
+                  (OpenMaya.MSceneMessage.kBeforeOpen, self._beforeOpenCb,
                    'before open'),
-                  (OpenMaya.MSceneMessage.kAfterOpen, self._afterOpenCb, 
+                  (OpenMaya.MSceneMessage.kAfterOpen, self._afterOpenCb,
                    'after open'),
-                  (OpenMaya.MSceneMessage.kAfterNew, self._afterNewCb, 
+                  (OpenMaya.MSceneMessage.kAfterNew, self._afterNewCb,
                    'after new')]
 
         for (msg, cb, data) in cbArgs:
@@ -158,7 +158,7 @@ class _StagesSubject(object):
         self._beforeNewCbCalled = False
 
         self._afterOpenCb(data)
-        
+
     def _afterOpenCb(self, data):
         pass
 
@@ -184,7 +184,7 @@ class _StagesSubject(object):
         if plug != self.filePathPlug:
             return
 
-        proxyShapeName = OpenMaya.MFnDagNode(node).partialPathName()  
+        proxyShapeName = OpenMaya.MFnDagNode(node).partialPathName()
         proxyShape = AL_USDMaya.ProxyShape.getByName(proxyShapeName)
 
         stage = proxyShape.getUsdStage()
@@ -217,7 +217,7 @@ class _StagesSubject(object):
         Notice will be of type Usd.Notice.ObjectsChanged.
         '''
         logger.debug('stageChanged() called! %s' % stage)
-        # If the stage path has not been initialized yet, do nothing 
+        # If the stage path has not been initialized yet, do nothing
         rootUfePath = stagePath(stage)
         if not rootUfePath:
             logger.warning('Could not find a proxy shape for stage: %s'

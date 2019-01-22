@@ -24,7 +24,7 @@
 # ===========================================================================
 #+
 
-'''Universal Front End USD transform operations 
+'''Universal Front End USD transform operations
 
 This module provides the logic to operate xform operations on USD objects
 '''
@@ -52,7 +52,7 @@ def primToUfeXform(prim):
     xform = ufe.Matrix4d()
     xform.matrix = tuples2dToList(usdMatrix)
     return xform
-    
+
 def primToUfeExclusiveXform(prim):
     xformCache = UsdGeom.XformCache()
     usdMatrix = xformCache.GetParentToWorldTransform(prim)
@@ -61,7 +61,7 @@ def primToUfeExclusiveXform(prim):
     return xform
 
 def convertToCompatibleCommonAPI(prim):
-    """ 
+    """
         As we are using USD's XformCommonAPI which supports only the following xformOps :
             ["xformOp:translate", "xformOp:translate:pivot", "xformOp:rotateXYZ", "xformOp:scale", "!invert!xformOp:translate:pivot"]
         We are extending the supported xform Operations with :
@@ -99,7 +99,7 @@ def convertToCompatibleCommonAPI(prim):
             pass
         # Not compatible
         else:
-            # Restore old 
+            # Restore old
             xformable.SetXformOpOrder(xformOps)
             raise Exception("Incompatible xform op %s:" % op.GetOpName())
     return primXform
@@ -118,10 +118,10 @@ def translateOp(prim, path, x, y, z,):
                 raise Exception ("Unable to SetTranslate on the 2nd try.")
         except Exception as e:
             raise Exception("Failed to translate prim %s - %s" % (str(path), e))
-    
+
 class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
-    ''' 
-        Translation command of the given prim 
+    '''
+        Translation command of the given prim
         Ability to perform undo to restore the original translate value.
         As of 06/07/2018, redo is a no op as Maya re-does the operation for redo
     '''
@@ -130,15 +130,15 @@ class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
         self._prim = prim
         self._noTranslateOp = False
         self._path = ufePath
-        
+
         # Prim does not have a translate attribute
         if not self._prim.HasAttribute('xformOp:translate'):
             self._noTranslateOp = True
             translateOp(self._prim, self._path, 0,0,0)# Add an empty translate
-            
+
         self._xlateAttrib = self._prim.GetAttribute('xformOp:translate')
         self._prevXlate = self._prim.GetAttribute('xformOp:translate').Get()
-        
+
     def _perform(self):
         ''' No-op, Use translate to move the object '''
         pass
@@ -150,7 +150,7 @@ class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
 
     def redo(self):
         self._perform()
-        
+
     def translate(self, x, y, z):
         translateOp(self._prim, self._path, x,y,z)
         return True
@@ -168,11 +168,11 @@ def rotateOp(prim, path, x, y, z):
             if not primXform.SetRotate(Gf.Vec3f(x,y,z)):
                 raise Exception ("Unable to SetRotate on the 2nd try.")
         except Exception as e:
-            raise Exception("Failed to rotate prim %s - %s" % (str(path), e))  
-    
+            raise Exception("Failed to rotate prim %s - %s" % (str(path), e))
+
 class UsdRotateUndoableCommand(ufe.RotateUndoableCommand):
-    ''' 
-        Absolute rotation command of the given prim 
+    '''
+        Absolute rotation command of the given prim
         Ability to perform undo to restore the original rotation value.
         As of 06/07/2018, redo is a no op as Maya re-does the operation for redo
     '''
@@ -182,25 +182,25 @@ class UsdRotateUndoableCommand(ufe.RotateUndoableCommand):
         self._noRotateOp = False
         self._path = ufePath
         self._failedInit = None
-                
-        # Since we want to change xformOp:rotateXYZ, and we need to store the prevRotate for 
-        # undo purpose, we need to make sure we convert it to common API xformOps (In case we have 
+
+        # Since we want to change xformOp:rotateXYZ, and we need to store the prevRotate for
+        # undo purpose, we need to make sure we convert it to common API xformOps (In case we have
         # rotateX, rotateY or rotateZ ops)
         try:
             convertToCompatibleCommonAPI(prim)
         except Exception as e:
             # Since Maya cannot catch this error at this moment, store it until we actually rotate
             self._failedInit = e
-            return 
-            
+            return
+
         # Prim does not have a rotateXYZ attribute
         if not self._prim.HasAttribute('xformOp:rotateXYZ'):
             rotateOp(self._prim, self._path, 0,0,0)
             self._noRotateOp = True
-            
+
         self._rotAttrib = self._prim.GetAttribute('xformOp:rotateXYZ')
         self._prevRotate = self._prim.GetAttribute('xformOp:rotateXYZ').Get()
-        
+
     def _perform(self):
         ''' No-op, Use rotate to move the object '''
         pass
@@ -214,14 +214,14 @@ class UsdRotateUndoableCommand(ufe.RotateUndoableCommand):
 
     def redo(self):
         self._perform()
-        
+
     def rotate(self, x, y, z):
         # Fail early - Initialization did not go as expected
         if self._failedInit:
             raise self._failedInit
         rotateOp(self._prim, self._path,x,y,z)
         return True
-        
+
 # ===========================================================================
 #                       Scale Operations
 # ===========================================================================
@@ -236,10 +236,10 @@ def scaleOp(prim, path, x, y, z,):
                 raise Exception ("Unable to SetScale on the 2nd try.")
         except Exception as e:
             raise Exception("Failed to scale prim %s - %s" % (str(path), e))
-    
+
 class UsdScaleUndoableCommand(ufe.ScaleUndoableCommand):
-    ''' 
-        Absolute scale command of the given prim 
+    '''
+        Absolute scale command of the given prim
         Ability to perform undo to restore the original scale value.
         As of 06/07/2018, redo is a no op as Maya re-does the operation for redo
     '''
@@ -248,15 +248,15 @@ class UsdScaleUndoableCommand(ufe.ScaleUndoableCommand):
         self._prim = prim
         self._noScaleOp = False
         self._path = ufePath
-        
+
         # Prim does not have a scale attribute
         if not self._prim.HasAttribute('xformOp:scale'):
             self._noScaleOp = True
-            scaleOp(self._prim, self._path, 1,1,1)# Add a neutral scale xformOp 
-            
+            scaleOp(self._prim, self._path, 1,1,1)# Add a neutral scale xformOp
+
         self._scaleAttrib = self._prim.GetAttribute('xformOp:scale')
         self._prevScale = self._prim.GetAttribute('xformOp:scale').Get()
-        
+
     def _perform(self):
         ''' No-op, Use scale to scale the object '''
         pass
@@ -268,7 +268,7 @@ class UsdScaleUndoableCommand(ufe.ScaleUndoableCommand):
 
     def redo(self):
         self._perform()
-        
+
     def scale(self, x, y, z):
         scaleOp(self._prim, self._path, x,y,z)
         return True
@@ -287,10 +287,10 @@ def rotatePivotTranslateOp(prim, path, x, y, z,):
                 raise Exception ("Unable to SetPivot on the 2nd try.")
         except Exception as e:
             raise Exception("Failed to set pivot for prim %s - %s" % (str(path), e))
-    
+
 class UsdRotatePivotTranslateUndoableCommand(ufe.TranslateUndoableCommand):
-    ''' 
-        Absolute translation command of the given prim's rotate pivot. 
+    '''
+        Absolute translation command of the given prim's rotate pivot.
         Ability to perform undo to restore the original pivot value.
     '''
     attrName = 'xformOp:translate:pivot'
@@ -300,16 +300,16 @@ class UsdRotatePivotTranslateUndoableCommand(ufe.TranslateUndoableCommand):
         self._prim = prim
         self._noPivotOp = False
         self._path = ufePath
-        
+
         # Prim does not have a pivot translate attribute
         if not self._prim.HasAttribute(self.attrName):
             self._noPivotOp = True
             # Add an empty pivot translate.
             rotatePivotTranslateOp(self._prim, self._path, 0,0,0)
-            
+
         self._xlateAttrib = self._prim.GetAttribute(self.attrName)
         self._prevXlate = self._xlateAttrib.Get()
-        
+
     def undo(self):
         self._xlateAttrib.Set(self._prevXlate)
         # Todo : We would want to remove the xformOp
@@ -319,7 +319,7 @@ class UsdRotatePivotTranslateUndoableCommand(ufe.TranslateUndoableCommand):
         # As of 07-Jun-2018, redo is a no op as Maya re-does the operation for
         # redo.
         pass
-        
+
     def translate(self, x, y, z):
         rotatePivotTranslateOp(self._prim, self._path, x,y,z)
         return True

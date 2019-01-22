@@ -76,7 +76,7 @@ class ParentCmdBase(OpenMaya.MPxCommand):
 
 class ParentCmd(ParentCmdBase):
     """Change the parent of a UFE item."""
-    
+
     kCmdName = 'ufeParent'
 
     # Command data.  Must be set before creating an instance of the command
