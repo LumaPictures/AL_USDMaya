@@ -297,21 +297,6 @@ void ProxyShapeUI::draw(const MDrawRequest& request, M3dView& view) const
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-class ProxyShapeSelectionHelper
-{
-public:
-
-  static SdfPath path_ting(const SdfPath& a, const SdfPath& b, const int c)
-  {
-    m_paths.push_back(a);
-    return a;
-  }
-  static SdfPathVector m_paths;
-};
-SdfPathVector ProxyShapeSelectionHelper::m_paths;
-
-
-//----------------------------------------------------------------------------------------------------------------------
 bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList, MPointArray& worldSpaceSelectPoints) const
 {
   TF_DEBUG(ALUSDMAYA_DRAW).Msg("ProxyShapeUI::select\n");
@@ -355,6 +340,19 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   if (resolution < 10) { resolution = 10; }
   if (resolution > 1024) { resolution = 1024; }
 
+  auto getHitPath = [&engine] (
+      const SdfPath& inPrimPath,
+      const SdfPath& instancerPath,
+      const int instanceIndex) -> SdfPath
+  {
+    auto path = engine->GetPrimPathFromInstanceIndex(inPrimPath, instanceIndex);
+    if (!path.IsEmpty())
+    {
+      return path;
+    }
+    return inPrimPath.StripAllVariantSelections();
+  };
+
   TfToken intersectionMode = selectInfo.singleSelection()
       ? HdxIntersectionModeTokens->nearestToCamera
       : HdxIntersectionModeTokens->unique;
@@ -367,26 +365,14 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
           params,
           intersectionMode,
           resolution,
-          ProxyShapeSelectionHelper::path_ting,
+          getHitPath,
           &hitBatch);
 
   auto selected = false;
 
-  auto getHitPath = [&engine] (const Engine::HitBatch::const_reference& it) -> SdfPath
-  {
-    const Engine::HitInfo& hit = it.second;
-    auto path = engine->GetPrimPathFromInstanceIndex(it.first, hit.hitInstanceIndex);
-    if (!path.IsEmpty())
-    {
-      return path;
-    }
-    return it.first.StripAllVariantSelections();
-  };
-
-
   auto addSelection = [&hitBatch, &selectInfo, &selectionList,
-      &worldSpaceSelectPoints, &objectsMask, &selected, proxyShape,
-      &getHitPath] (const MString& command)
+      &worldSpaceSelectPoints, &objectsMask, &selected, proxyShape]
+      (const MString& command)
   {
     selected = true;
     MStringArray nodes;
@@ -403,7 +389,7 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
 
       // Retarget hit path based on pick mode policy. The retargeted prim must
       // align with the path used in the 'AL_usdmaya_ProxyShapeSelect' command.
-      const SdfPath hitPath = getHitPath(it).StripAllVariantSelections();
+      const SdfPath hitPath = it.first.StripAllVariantSelections();
       const UsdPrim retargetedHitPrim = retargetSelectPrim(proxyShape->getUsdStage()->GetPrimAtPath(hitPath));
       const MObject obj = proxyShape->findRequiredPath(retargetedHitPrim.GetPath());
 
@@ -456,9 +442,8 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
 
       for(const auto& it : hitBatch)
       {
-        auto path = getHitPath(it);
         command += " -pp \"";
-        command += path.GetText();
+        command += it.first.GetText();
         command += "\"";
       }
 
@@ -502,7 +487,7 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
       paths.reserve(hitBatch.size());
       for (const auto& it : hitBatch)
       {
-        paths.push_back(getHitPath(it));
+        paths.push_back(it.first);
       }
     }
 #if defined(WANT_UFE_BUILD)
@@ -726,8 +711,6 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   } // else MAYA_WANT_UFE_SELECTION
 #endif
   }
-
-  ProxyShapeSelectionHelper::m_paths.clear();
 
   // restore clear colour
   glClearColor(clearCol[0], clearCol[1], clearCol[2], clearCol[3]);
