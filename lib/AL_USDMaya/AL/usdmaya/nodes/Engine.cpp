@@ -39,8 +39,6 @@
 #include <vector>
 #include "AL/usdmaya/nodes/Engine.h"
 
-#include "pxr/imaging/hdx/intersector.h"
-
 namespace AL {
 namespace usdmaya {
 namespace nodes {
@@ -48,27 +46,62 @@ namespace nodes {
 Engine::Engine(const SdfPath& rootPath, const SdfPathVector& excludedPaths)
   : UsdImagingGLEngine(rootPath, excludedPaths) {}
 
+
 bool Engine::TestIntersectionBatch(
   const GfMatrix4d &viewMatrix,
   const GfMatrix4d &projectionMatrix,
   const GfMatrix4d &worldToLocalSpace,
   const SdfPathVector& paths,
-  UsdImagingGLRenderParams params,
+  const UsdImagingGLRenderParams& params,
   const TfToken &intersectionMode,
   unsigned int pickResolution,
-  PathTranslatorCallback pathTranslator,
-  HitBatch *outHit) {
-  if (ARCH_UNLIKELY(_legacyImpl)) {
+  HdxIntersector::HitVector& outHits)
+{
+  if (ARCH_UNLIKELY(_legacyImpl))
+  {
     return false;
   }
-  _UpdateHydraCollection(&_intersectCollection, paths, params, &_renderTags);
 
-  HdxIntersector::HitVector allHits;
+  TF_VERIFY(_delegate);
+
+  return TestIntersectionBatch(
+      viewMatrix,
+      projectionMatrix,
+      worldToLocalSpace,
+      paths,
+      params,
+      intersectionMode,
+      pickResolution,
+      _intersectCollection,
+      *_taskController,
+      _engine,
+      _renderTags,
+      outHits);
+}
+
+/*static*/
+bool Engine::TestIntersectionBatch(
+  const GfMatrix4d &viewMatrix,
+  const GfMatrix4d &projectionMatrix,
+  const GfMatrix4d &worldToLocalSpace,
+  const SdfPathVector& paths,
+  const UsdImagingGLRenderParams& params,
+  const TfToken &intersectionMode,
+  unsigned int pickResolution,
+  HdRprimCollection& intersectCollection,
+  HdxTaskController& taskController,
+  HdEngine& engine,
+  TfTokenVector& outRenderTags,
+  HdxIntersector::HitVector& outHits)
+{
+  _UpdateHydraCollection(&intersectCollection, paths, params, &outRenderTags);
+
   HdxIntersector::Params qparams;
   qparams.viewMatrix = worldToLocalSpace * viewMatrix;
   qparams.projectionMatrix = projectionMatrix;
   qparams.alphaThreshold = params.alphaThreshold;
-  switch (params.cullStyle) {
+  switch (params.cullStyle)
+  {
     case UsdImagingGLCullStyle::CULL_STYLE_NO_OPINION:
       qparams.cullStyle = HdCullStyleDontCare;
       break;
@@ -87,30 +120,12 @@ bool Engine::TestIntersectionBatch(
     default:
       qparams.cullStyle = HdCullStyleDontCare;
   }
-  qparams.renderTags = _renderTags;
+  qparams.renderTags = outRenderTags;
   qparams.enableSceneMaterials = params.enableSceneMaterials;
 
-  _taskController->SetPickResolution(pickResolution);
-  if (!_taskController->TestIntersection(
-      &_engine,
-      _intersectCollection,
-      qparams,
-      intersectionMode,
-      &allHits)) {
-    return false;
-  }
+  taskController.SetPickResolution(pickResolution);
 
-  if (!outHit) {
-    return true;
-  }
-
-  for (const auto& hit : allHits) {
-    const SdfPath usdPath = pathTranslator(hit.objectId, hit.instancerId,
-        hit.instanceIndex);
-    (*outHit)[usdPath] = hit.worldSpaceHitPoint;
-  }
-
-  return true;
+  return taskController.TestIntersection(&engine, intersectCollection, qparams, intersectionMode, &outHits);
 }
 
 }

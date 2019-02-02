@@ -326,12 +326,11 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   view.endSelect();
 
   auto* proxyShape = static_cast<ProxyShape*>(surfaceShape());
-  auto engine = proxyShape->engine();
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();
 
-  Engine::HitBatch hitBatch;
+  ProxyShape::HitBatch hitBatch;
   SdfPathVector rootPath;
   rootPath.push_back(root.GetPath());
 
@@ -340,33 +339,15 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   if (resolution < 10) { resolution = 10; }
   if (resolution > 1024) { resolution = 1024; }
 
-  auto getHitPath = [&engine] (
-      const SdfPath& inPrimPath,
-      const SdfPath& instancerPath,
-      const int instanceIndex) -> SdfPath
-  {
-    auto path = engine->GetPrimPathFromInstanceIndex(inPrimPath, instanceIndex);
-    if (!path.IsEmpty())
-    {
-      return path;
-    }
-    return inPrimPath.StripAllVariantSelections();
-  };
-
-  TfToken intersectionMode = selectInfo.singleSelection()
-      ? HdxIntersectionModeTokens->nearestToCamera
-      : HdxIntersectionModeTokens->unique;
-
-  bool hitSelected = engine->TestIntersectionBatch(
+  bool hitSelected = proxyShape->findPickedPrims(
           GfMatrix4d(viewMatrix.matrix),
           GfMatrix4d(projectionMatrix.matrix),
           worldToLocalSpace,
           rootPath,
           params,
-          intersectionMode,
+          selectInfo.singleSelection(),
           resolution,
-          getHitPath,
-          &hitBatch);
+          hitBatch);
 
   auto selected = false;
 
