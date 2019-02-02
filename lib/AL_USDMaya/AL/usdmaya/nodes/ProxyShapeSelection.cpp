@@ -17,6 +17,7 @@
 
 #include "AL/usdmaya/Metadata.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
+#include "AL/usdmaya/nodes/Engine.h"
 #include "AL/usdmaya/nodes/Transform.h"
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
 
@@ -42,6 +43,8 @@ inline void addObjToSelectionList(MSelectionList& list, const MObject& object)
   }
 };
 }
+
+ProxyShape::FindPickedPrimsFunction ProxyShape::m_findPickedPrimsFunction = ProxyShape::findPickedPrimsDefault;
 
 //----------------------------------------------------------------------------------------------------------------------
 /// I have to handle the case where maya commands are issued (e.g. select -cl) that will remove our transform nodes
@@ -1330,6 +1333,51 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
 
   m_pleaseIgnoreSelection = false;
   triggerEvent("SelectionEnded");
+  return true;
+}
+
+bool ProxyShape::findPickedPrimsDefault(
+    ProxyShape& proxy,
+    const GfMatrix4d& viewMatrix,
+    const GfMatrix4d& projectionMatrix,
+    const GfMatrix4d& worldToLocalSpace,
+    const SdfPathVector& paths,
+    const UsdImagingGLRenderParams& params,
+    bool nearestOnly,
+    unsigned int pickResolution,
+    HitBatch& outHit)
+{
+  TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d\n",
+      nearestOnly);
+
+  HdxIntersector::HitVector allHits;
+  if (!proxy.engine()->TestIntersectionBatch(
+      viewMatrix,
+      projectionMatrix,
+      worldToLocalSpace,
+      paths,
+      params,
+      nearestOnly ?
+          HdxIntersectionModeTokens->nearestToCamera :
+          HdxIntersectionModeTokens->unique,
+      pickResolution,
+      allHits)) {
+    return false;
+  }
+
+  for (const auto& hit : allHits) {
+    const SdfPath primPath = hit.objectId;
+    const SdfPath instancerPath = hit.instancerId;
+    const int instanceIndex = hit.instanceIndex;
+
+    auto instancePath = proxy.engine()->GetPrimPathFromInstanceIndex(primPath, instanceIndex);
+    if (instancePath.IsEmpty())
+    {
+      instancePath = primPath.StripAllVariantSelections();
+    }
+    outHit[instancePath] = hit.worldSpaceHitPoint;
+  }
+
   return true;
 }
 
