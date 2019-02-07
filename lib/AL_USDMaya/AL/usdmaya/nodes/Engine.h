@@ -30,11 +30,7 @@ public:
   Engine(const SdfPath& rootPath,
          const SdfPathVector& excludedPaths);
 
-  struct HitInfo {
-    GfVec3d worldSpaceHitPoint;
-    int hitInstanceIndex;
-  };
-  typedef TfHashMap<SdfPath, HitInfo, SdfPath::Hash> HitBatch;
+  typedef TfHashMap<SdfPath, GfVec3d, SdfPath::Hash> HitBatch;
 
   typedef std::function<SdfPath(const SdfPath&, const SdfPath&, const int)> PathTranslatorCallback;
 

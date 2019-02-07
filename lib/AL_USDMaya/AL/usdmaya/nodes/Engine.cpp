@@ -105,16 +105,9 @@ bool Engine::TestIntersectionBatch(
   }
 
   for (const auto& hit : allHits) {
-    const SdfPath primPath = hit.objectId;
-    const SdfPath instancerPath = hit.instancerId;
-    const int instanceIndex = hit.instanceIndex;
-
-    HitInfo& info = (*outHit)[pathTranslator(primPath, instancerPath,
-                                             instanceIndex)];
-    info.worldSpaceHitPoint = GfVec3d(hit.worldSpaceHitPoint[0],
-                                      hit.worldSpaceHitPoint[1],
-                                      hit.worldSpaceHitPoint[2]);
-    info.hitInstanceIndex = instanceIndex;
+    const SdfPath usdPath = pathTranslator(hit.objectId, hit.instancerId,
+        hit.instanceIndex);
+    (*outHit)[usdPath] = hit.worldSpaceHitPoint;
   }
 
   return true;
