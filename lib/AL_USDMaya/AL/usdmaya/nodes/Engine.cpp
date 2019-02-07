@@ -40,7 +40,6 @@
 #include "AL/usdmaya/nodes/Engine.h"
 
 #include "pxr/imaging/hdx/intersector.h"
-#include "pxr/imaging/hdx/taskController.h"
 
 namespace AL {
 namespace usdmaya {
@@ -55,6 +54,7 @@ bool Engine::TestIntersectionBatch(
   const GfMatrix4d &worldToLocalSpace,
   const SdfPathVector& paths,
   UsdImagingGLRenderParams params,
+  const TfToken &intersectionMode,
   unsigned int pickResolution,
   PathTranslatorCallback pathTranslator,
   HitBatch *outHit) {
@@ -95,7 +95,7 @@ bool Engine::TestIntersectionBatch(
       &_engine,
       _intersectCollection,
       qparams,
-      HdxIntersectionModeTokens->unique,
+      intersectionMode,
       &allHits)) {
     return false;
   }

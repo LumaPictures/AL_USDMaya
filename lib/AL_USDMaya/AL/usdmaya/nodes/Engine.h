@@ -15,6 +15,7 @@
 //
 #pragma once
 
+#include "pxr/imaging/hdx/taskController.h"
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 #include "pxr/usdImaging/usdImagingGL/renderParams.h"
 
@@ -43,6 +44,7 @@ public:
     const GfMatrix4d &worldToLocalSpace,
     const SdfPathVector& paths,
     UsdImagingGLRenderParams params,
+    const TfToken &intersectionMode,
     unsigned int pickResolution,
     PathTranslatorCallback pathTranslator,
     HitBatch *outHit);
