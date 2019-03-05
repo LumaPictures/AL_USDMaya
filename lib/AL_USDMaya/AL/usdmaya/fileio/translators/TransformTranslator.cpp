@@ -641,7 +641,7 @@ UsdAttribute addRotateOp(
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, const ExporterParams& params)
+MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, const ExporterParams& params, const MDagPath& path)
 {
   UsdGeomXform xformSchema(to);
   GfVec3f scale;
@@ -657,21 +657,6 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
   bool inheritsTransform;
   bool visible;
 
-  const float radToDeg = 57.295779506f;
-
-  getBool(from, m_inheritsTransform, inheritsTransform);
-  getBool(from, m_visible, visible);
-  getVec3(from, m_scale, (float*)&scale);
-  getVec3(from, m_shear, (float*)&shear);
-  getVec3(from, m_rotation, (float*)&rotation);
-  getInt32(from, m_rotateOrder, rotateOrder);
-  getVec3(from, m_rotateAxis, (float*)&rotateAxis);
-  getVec3(from, m_translation, (float*)&translation);
-  getVec3(from, m_scalePivot, (float*)&scalePivot);
-  getVec3(from, m_rotatePivot, (float*)&rotatePivot);
-  getVec3(from, m_scalePivotTranslate, (float*)&scalePivotTranslate);
-  getVec3(from, m_rotatePivotTranslate, (float*)&rotatePivotTranslate);
-
   static const GfVec3f defaultScale(1.0f);
   static const GfVec3f defaultShear(0.0f);
   static const GfVec3f defaultRotation(0.0f);
@@ -683,6 +668,7 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
   static const GfVec3f defaultRotatePivotTranslate(0.0f);
   static const bool defaultVisible(true);
 
+  const float radToDeg = 57.295779506f;
   AnimationTranslator* animTranslator = params.m_animTranslator;
 
   // Check if transform attributes are considered animated,
@@ -693,109 +679,131 @@ MStatus TransformTranslator::copyAttributes(const MObject& from, UsdPrim& to, co
     transformAnimated = animTranslator->isAnimatedTransform(from);
   }
 
-  // For insurance, we will make sure there aren't any ordered ops before we start
-  xformSchema.ClearXformOpOrder();
-
-  // This adds an op to the stack so we should do it after ClearXformOpOrder():
-  xformSchema.SetResetXformStack(!inheritsTransform);
-
-  bool plugAnimated = animationCheck(animTranslator, MPlug(from, m_visible));
-  if (plugAnimated || visible != defaultVisible)
+  if(!params.m_exportInWorldSpace)
   {
-    UsdAttribute visibleAttr = xformSchema.GetVisibilityAttr();
+    getBool(from, m_inheritsTransform, inheritsTransform);
+    getBool(from, m_visible, visible);
+    getVec3(from, m_scale, (float*)&scale);
+    getVec3(from, m_shear, (float*)&shear);
+    getVec3(from, m_rotation, (float*)&rotation);
+    getInt32(from, m_rotateOrder, rotateOrder);
+    getVec3(from, m_rotateAxis, (float*)&rotateAxis);
+    getVec3(from, m_translation, (float*)&translation);
+    getVec3(from, m_scalePivot, (float*)&scalePivot);
+    getVec3(from, m_rotatePivot, (float*)&rotatePivot);
+    getVec3(from, m_scalePivotTranslate, (float*)&scalePivotTranslate);
+    getVec3(from, m_rotatePivotTranslate, (float*)&rotatePivotTranslate);
 
-    if (plugAnimated && animTranslator)
+    // For insurance, we will make sure there aren't any ordered ops before we start
+    xformSchema.ClearXformOpOrder();
+
+    // This adds an op to the stack so we should do it after ClearXformOpOrder():
+    xformSchema.SetResetXformStack(!inheritsTransform);
+
+    bool plugAnimated = animationCheck(animTranslator, MPlug(from, m_visible));
+    if (plugAnimated || visible != defaultVisible)
     {
-      animTranslator->forceAddTransformPlug(MPlug(from, m_visible), visibleAttr);
+      UsdAttribute visibleAttr = xformSchema.GetVisibilityAttr();
+
+      if (plugAnimated && animTranslator)
+      {
+        animTranslator->forceAddTransformPlug(MPlug(from, m_visible), visibleAttr);
+      }
+      else
+      {
+        visibleAttr.Set(visible ? UsdGeomTokens->inherited : UsdGeomTokens->invisible);
+      }
     }
-    else
+
+    plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_translation));
+    if(plugAnimated || translation != defaultTranslation)
     {
-      visibleAttr.Set(visible ? UsdGeomTokens->inherited : UsdGeomTokens->invisible);
+      UsdAttribute translateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->translate, translation, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_translation), translateAttr);
+    }
+
+    plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivotTranslate));
+    if(plugAnimated || rotatePivotTranslate != defaultRotatePivotTranslate)
+    {
+      UsdAttribute rotatePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivotTranslate, rotatePivotTranslate, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivotTranslate), rotatePivotTranslateAttr);
+    }
+
+    plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivot));
+    bool makeRotatePivot = plugAnimated || rotatePivot != defaultRotatePivot;
+    if(makeRotatePivot)
+    {
+      UsdAttribute rotatePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotAttr);
+    }
+
+    plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_rotation));
+    if(plugAnimated || rotation != defaultRotation)
+    {
+      rotation *= radToDeg;
+      UsdAttribute rotateAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotate, rotateOrder, rotation, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotation), rotateAttr, radToDeg);
+    }
+
+    plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotateAxis));
+    if(plugAnimated || rotateAxis != defaultRotateAxis)
+    {
+      rotateAxis *= radToDeg;
+      UsdAttribute rotateAxisAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotateAxis, MEulerRotation::kXYZ, rotateAxis, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotateAxis), rotateAxisAttr, radToDeg);
+    }
+
+    if(makeRotatePivot)
+    {
+      UsdAttribute rotatePivotINVAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode, true);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotINVAttr);
+    }
+
+    plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivotTranslate));
+    if(plugAnimated || scalePivotTranslate != defaultScalePivotTranslate)
+    {
+      UsdAttribute scalePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivotTranslate, scalePivotTranslate, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivotTranslate), scalePivotTranslateAttr);
+    }
+
+    plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivot));
+    bool makeScalePivot = plugAnimated || scalePivot != defaultScalePivot;
+    if(makeScalePivot)
+    {
+      UsdAttribute scalePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotAttr);
+    }
+
+    if(shear != defaultShear)
+    {
+      GfMatrix4d shearMatrix(
+          1.0f, 0.0f, 0.0f, 0.0f,
+          shear[0], 1.0f, 0.0f, 0.0f,
+          shear[1], shear[2], 1.0f, 0.0f,
+          0.0f, 0.0f, 0.0f, 1.0f);
+      UsdGeomXformOp op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, UsdMayaXformStackTokens->shear);
+      op.Set(shearMatrix, params.m_timeCode);
+    }
+
+    plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_scale));
+    if(plugAnimated || scale != defaultScale)
+    {
+      UsdGeomXformOp op = xformSchema.AddScaleOp(UsdGeomXformOp::PrecisionFloat, UsdMayaXformStackTokens->scale);
+      op.Set(scale, params.m_timeCode);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scale), op.GetAttr());
+    }
+
+    if(makeScalePivot)
+    {
+      UsdAttribute scalePivotINVAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode, true);
+      if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotINVAttr);
     }
   }
-
-  plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_translation));
-  if(plugAnimated || translation != defaultTranslation)
+  else
   {
-    UsdAttribute translateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->translate, translation, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_translation), translateAttr);
-  }
-
-  plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivotTranslate));
-  if(plugAnimated || rotatePivotTranslate != defaultRotatePivotTranslate)
-  {
-    UsdAttribute rotatePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivotTranslate, rotatePivotTranslate, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivotTranslate), rotatePivotTranslateAttr);
-  }
-
-  plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotatePivot));
-  bool makeRotatePivot = plugAnimated || rotatePivot != defaultRotatePivot;
-  if(makeRotatePivot)
-  {
-    UsdAttribute rotatePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotAttr);
-  }
-
-  plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_rotation));
-  if(plugAnimated || rotation != defaultRotation)
-  {
-    rotation *= radToDeg;
-    UsdAttribute rotateAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotate, rotateOrder, rotation, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotation), rotateAttr, radToDeg);
-  }
-
-  plugAnimated = animationCheck(animTranslator, MPlug(from, m_rotateAxis));
-  if(plugAnimated || rotateAxis != defaultRotateAxis)
-  {
-    rotateAxis *= radToDeg;
-    UsdAttribute rotateAxisAttr = addRotateOp(xformSchema, UsdMayaXformStackTokens->rotateAxis, MEulerRotation::kXYZ, rotateAxis, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotateAxis), rotateAxisAttr, radToDeg);
-  }
-
-  if(makeRotatePivot)
-  {
-    UsdAttribute rotatePivotINVAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->rotatePivot, rotatePivot, params.m_timeCode, true);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_rotatePivot), rotatePivotINVAttr);
-  }
-
-  plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivotTranslate));
-  if(plugAnimated || scalePivotTranslate != defaultScalePivotTranslate)
-  {
-    UsdAttribute scalePivotTranslateAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivotTranslate, scalePivotTranslate, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivotTranslate), scalePivotTranslateAttr);
-  }
-
-  plugAnimated = animationCheck(animTranslator, MPlug(from, m_scalePivot));
-  bool makeScalePivot = plugAnimated || scalePivot != defaultScalePivot;
-  if(makeScalePivot)
-  {
-    UsdAttribute scalePivotAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotAttr);
-  }
-
-  if(shear != defaultShear)
-  {
-    GfMatrix4d shearMatrix(
-        1.0f, 0.0f, 0.0f, 0.0f,
-        shear[0], 1.0f, 0.0f, 0.0f,
-        shear[1], shear[2], 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f, 1.0f);
-    UsdGeomXformOp op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, UsdMayaXformStackTokens->shear);
-    op.Set(shearMatrix, params.m_timeCode);
-  }
-
-  plugAnimated = transformAnimated || animationCheck(animTranslator, MPlug(from, m_scale));
-  if(plugAnimated || scale != defaultScale)
-  {
-    UsdGeomXformOp op = xformSchema.AddScaleOp(UsdGeomXformOp::PrecisionFloat, UsdMayaXformStackTokens->scale);
-    op.Set(scale, params.m_timeCode);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scale), op.GetAttr());
-  }
-
-  if(makeScalePivot)
-  {
-    UsdAttribute scalePivotINVAttr = addTranslateOp(xformSchema, UsdMayaXformStackTokens->scalePivot, scalePivot, params.m_timeCode, true);
-    if(plugAnimated && animTranslator) animTranslator->forceAddPlug(MPlug(from, m_scalePivot), scalePivotINVAttr);
+    MMatrix wsm = path.inclusiveMatrix();
+    auto op = xformSchema.AddTransformOp(UsdGeomXformOp::PrecisionDouble, UsdMayaXformStackTokens->transform);
+    op.Set(*(const GfMatrix4d*)&wsm, params.m_timeCode);
   }
 
   return MS::kSuccess;
