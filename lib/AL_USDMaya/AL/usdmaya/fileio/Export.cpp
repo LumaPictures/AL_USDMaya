@@ -558,10 +558,23 @@ void Export::exportIkChain(MDagPath effectorPath, const SdfPath& usdPath)
 //----------------------------------------------------------------------------------------------------------------------
 void Export::copyTransformParams(UsdPrim prim, MFnTransform& fnTransform)
 {
-  translators::TransformTranslator::copyAttributes(fnTransform.object(), prim, m_params);
+
+  translators::TransformTranslator::copyAttributes(fnTransform.object(), prim, m_params, fnTransform.dagPath());
   if(m_params.m_dynamicAttributes)
   {
     translators::DgNodeTranslator::copyDynamicAttributes(fnTransform.object(), prim);
+  }
+
+  // handle the special case of exporting 
+  {
+    auto dataPlugins = m_translatorManufacture.getExtraDataPlugins(fnTransform.object());
+    for(auto dataPlugin : dataPlugins)
+    {
+      if(dataPlugin->getFnType() == MFn::kTransform)
+      {
+        dataPlugin->exportObject(prim, fnTransform.object(), ExporterParams());
+      }
+    }
   }
 }
 
@@ -640,22 +653,54 @@ void Export::addReferences(MDagPath shapePath, MFnTransform& fnTransform, SdfPat
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+bool Export::isPrimDefined(SdfPath& usdPath)
+{
+  UsdPrim transformPrim = m_impl->stage()->GetPrimAtPath(usdPath);
+  return (transformPrim && transformPrim.IsDefined());
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 void Export::exportShapesCommonProc(MDagPath shapePath, MFnTransform& fnTransform, SdfPath& usdPath,
                                     const ReferenceType refType)
 {
   UsdPrim transformPrim;
+
   bool copyTransform = true;
   MFnDagNode dgNode(shapePath);
-
   translators::TranslatorManufacture::RefPtr translatorPtr = m_translatorManufacture.get(shapePath.node());
   if (translatorPtr)
   {
-    SdfPath meshPath = determineUsdPath(shapePath, usdPath, refType);
-    transformPrim = translatorPtr->exportObject(m_impl->stage(), shapePath, meshPath, m_params);
+    SdfPath shapeUsdPath = determineUsdPath(shapePath, usdPath, refType);
+
+    // If the prim is valid and has already been defined, we skip the leftover shapes.
+    // Since that is probably the case a transform has multiple shapes and we chose to merge transform.
+    // In that case, once a shape get exported we will skip the rest of shapes.
+    if(isPrimDefined(shapeUsdPath))
+    {
+      TF_WARN("The usd prim: %s has already been defined, will skip exporting the shape: %s",
+        shapeUsdPath.GetText(), shapePath.partialPathName().asChar());
+      return;
+    }
+
+    transformPrim = translatorPtr->exportObject(m_impl->stage(), shapePath, shapeUsdPath, m_params);
+    auto dataPlugins = m_translatorManufacture.getExtraDataPlugins(shapePath.node());
+    for(auto dataPlugin : dataPlugins)
+    {
+      dataPlugin->exportObject(transformPrim, shapePath.node(), m_params);
+    }
+
     copyTransform = (refType == kNoReference);
   }
   else // no translator register for this Maya type
   {
+    // As same reason above, for multiple shapes transform, once there's a shape exported, we ignore the leftovers:
+    if(isPrimDefined(usdPath))
+    {
+      TF_WARN("The usd prim: %s has already been defined, will skip exporting the shape: %s",
+        usdPath.GetText(), shapePath.partialPathName().asChar());
+      return;
+    }
+
     if (shapePath.node().hasFn(MFn::kAssembly))
     {
       transformPrim = exportAssembly(shapePath, usdPath);
@@ -714,10 +759,21 @@ void Export::exportSceneHierarchy(MDagPath rootPath, SdfPath& defaultPrim)
   {
     this->exportShapesCommonProc(shapePath, fnTransform, usdPath, refType);
   };
-  std::function<void(MDagPath, MFnTransform&, SdfPath&)> exportTransformFunc =
-      [this] (MDagPath transformPath, MFnTransform& fnTransform, SdfPath& usdPath)
+  std::function<void(MDagPath, MFnTransform&, SdfPath&, bool)> exportTransformFunc =
+      [this] (MDagPath transformPath, MFnTransform& fnTransform, SdfPath& usdPath, bool inWorldSpace)
   {
-    UsdGeomXform xform = UsdGeomXform::Define(m_impl->stage(), usdPath);
+    SdfPath path;
+    if(inWorldSpace)
+    {
+      const std::string& pathName = usdPath.GetString();
+      size_t s = pathName.find_last_of('/');
+      path = SdfPath(pathName.data() + s);
+    }
+    else
+    {
+      path = usdPath;
+    }
+    UsdGeomXform xform = UsdGeomXform::Define(m_impl->stage(), path);
     UsdPrim transformPrim = xform.GetPrim();
     this->copyTransformParams(transformPrim, fnTransform);
   };
@@ -731,9 +787,12 @@ void Export::exportSceneHierarchy(MDagPath rootPath, SdfPath& defaultPrim)
       this->exportShapesOnlyUVProc(shapePath, fnTransform, usdPath);
     };
     exportTransformFunc =
-          [this] (MDagPath transformPath, MFnTransform& fnTransform, SdfPath& usdPath)
+          [this] (MDagPath transformPath, MFnTransform& fnTransform, SdfPath& usdPath, bool inWorldSpace)
     {
-      m_impl->stage()->OverridePrim(usdPath);
+      const std::string& pathName = usdPath.GetString();
+      size_t s = pathName.find_last_of('/');
+      SdfPath path(pathName.data() + s);
+      m_impl->stage()->OverridePrim(path);
     };
   }
 
@@ -789,9 +848,9 @@ void Export::exportSceneHierarchy(MDagPath rootPath, SdfPath& defaultPrim)
       uint32_t numShapes;
       transformPath.numberOfShapesDirectlyBelow(numShapes);
 
-      if(!m_params.m_mergeTransforms)
+      if(!m_params.m_mergeTransforms && !m_params.m_exportInWorldSpace)
       {
-        exportTransformFunc(transformPath, fnTransform, usdPath);
+        exportTransformFunc(transformPath, fnTransform, usdPath, m_params.m_exportInWorldSpace);
         UsdPrim prim = m_impl->stage()->GetPrimAtPath(usdPath);
         prim.SetMetadata<TfToken>(AL::usdmaya::Metadata::mergedTransform, AL::usdmaya::Metadata::unmerged);
       }
@@ -850,7 +909,7 @@ void Export::exportSceneHierarchy(MDagPath rootPath, SdfPath& defaultPrim)
       {
         if(m_params.m_mergeTransforms)
         {
-          exportTransformFunc(transformPath, fnTransform, usdPath);
+          exportTransformFunc(transformPath, fnTransform, usdPath, m_params.m_exportInWorldSpace);
         }
       }
     }
@@ -965,10 +1024,21 @@ MStatus ExportCommand::doIt(const MArgList& args)
   {
     AL_MAYA_CHECK_ERROR(argData.getFlagArgument("m", 0, m_params.m_meshes), "ALUSDExport: Unable to fetch \"meshes\" argument");
   }
-  if(argData.isFlagSet("muv", &status))
+  if(argData.isFlagSet("uvs", &status))
   {
-    AL_MAYA_CHECK_ERROR(argData.getFlagArgument("muv", 0, m_params.m_meshUV), "ALUSDExport: Unable to fetch \"meshUV\" argument");
+    AL_MAYA_CHECK_ERROR(argData.getFlagArgument("uvs", 0, m_params.m_meshUvs), "ALUSDExport: Unable to fetch \"meshUVS\" argument");
   }
+  if(argData.isFlagSet("uvo", &status))
+  {
+    AL_MAYA_CHECK_ERROR(argData.getFlagArgument("uvo", 0, m_params.m_meshUV), "ALUSDExport: Unable to fetch \"meshUVOnly\" argument");
+  }
+  if(argData.isFlagSet("pr", &status))
+  {
+    AL_MAYA_CHECK_ERROR(argData.getFlagArgument("pr", 0, m_params.m_meshPointsAsPref), "ALUSDExport: Unable to fetch \"meshPointsPref\" argument");
+  }
+
+
+
   if(argData.isFlagSet("luv", &status))
   {
     MGlobal::displayWarning("-luv flag is deprecated in AL_usdmaya_ExportCommand\n");
@@ -1008,7 +1078,10 @@ MStatus ExportCommand::doIt(const MArgList& args)
   {
     AL_MAYA_CHECK_ERROR(argData.getFlagArgument("eac", 0, m_params.m_extensiveAnimationCheck), "ALUSDExport: Unable to fetch \"extensive animation check\" argument");
   }
-
+  if(argData.isFlagSet("ws", &status))
+  {
+    AL_MAYA_CHECK_ERROR(argData.getFlagArgument("ws", 0, m_params.m_exportInWorldSpace), "ALUSDExport: Unable to fetch \"world space\" argument");
+  }
   if(m_params.m_animation)
   {
     m_params.m_animTranslator = new AnimationTranslator;
@@ -1076,7 +1149,11 @@ MSyntax ExportCommand::createSyntax()
   AL_MAYA_CHECK_ERROR2(status, errorString);
   status = syntax.addFlag("-m" , "-meshes", MSyntax::kBoolean);
   AL_MAYA_CHECK_ERROR2(status, errorString);
-  status = syntax.addFlag("-muv" , "-meshUV", MSyntax::kBoolean);
+  status = syntax.addFlag("-uvs" , "-meshUVS", MSyntax::kBoolean); // If this is on, we export UV data beside normal data.
+  AL_MAYA_CHECK_ERROR2(status, errorString);
+  status = syntax.addFlag("-uvo" , "-meshUVOnly", MSyntax::kBoolean); // when this is on, only overs contains UV are exported.
+  AL_MAYA_CHECK_ERROR2(status, errorString);
+  status = syntax.addFlag("-pr" , "-meshPointsPref", MSyntax::kBoolean); // when this is on, only overs contains UV are exported.
   AL_MAYA_CHECK_ERROR2(status, errorString);
   status = syntax.addFlag("-luv" , "-leftHandedUV", MSyntax::kBoolean);
   AL_MAYA_CHECK_ERROR2(status, errorString);
@@ -1096,6 +1173,8 @@ MSyntax ExportCommand::createSyntax()
   AL_MAYA_CHECK_ERROR2(status, errorString);
   status = syntax.addFlag("-ss", "-subSamples", MSyntax::kUnsigned);
   AL_MAYA_CHECK_ERROR2(status, errorString);
+  status = syntax.addFlag("-ws", "-worldSpace", MSyntax::kBoolean);
+  AL_MAYA_CHECK_ERROR2(status, errorString);
   syntax.enableQuery(false);
   syntax.enableEdit(false);
 
@@ -1106,7 +1185,7 @@ MSyntax ExportCommand::createSyntax()
 const char* const ExportCommand::g_helpText = R"(
 ExportCommand Overview:
 
-  This command will export your maya scene into the USD format. If you want the export to happen from 
+  This command will export your maya scene into the USD format. If you want the export to happen from
   a certain point in the hierarchy then select the node in maya and pass the parameter selected=True, otherwise
   it will export from the root of the scene.
 
@@ -1122,7 +1201,7 @@ ExportCommand Overview:
 
   Nurbs curves can be exported by passing the corresponding parameters:
     1. AL_usdmaya_ExportCommand -f "<path/to/out/file.usd>" -nc
-  
+
   The exporter can remove samples that contain the same data for adjacent samples
     1. AL_usdmaya_ExportCommand -f "<path/to/out/file.usd>" -fs
 )";

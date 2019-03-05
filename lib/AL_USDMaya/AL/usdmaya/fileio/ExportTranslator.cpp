@@ -69,6 +69,8 @@ MStatus ExportTranslator::writer(const MFileObject& file, const AL::maya::utils:
   params.m_meshVertexCreases = options.getBool(kMeshVertexCreases);
   params.m_meshEdgeCreases = options.getBool(kMeshEdgeCreases);
   params.m_meshUvs = options.getBool(kMeshUvs);
+  params.m_meshUV = options.getBool(kMeshUvOnly);
+  params.m_meshPointsAsPref = options.getBool(kMeshPointsAsPref);
   params.m_meshColours = options.getBool(kMeshColours);
   params.m_meshHoles = options.getBool(kMeshHoles);
   params.m_compactionLevel = options.getInt(kCompactionLevel);
@@ -77,7 +79,8 @@ MStatus ExportTranslator::writer(const MFileObject& file, const AL::maya::utils:
   params.m_fileName = file.fullName();
   params.m_selected = mode == MPxFileTranslator::kExportActiveAccessMode;
   params.m_animation = options.getBool(kAnimation);
-  params.m_exportAtWhichTime = options.getInt(kExportAtWhichTime);
+  params.m_exportAtWhichTime = options.getBool(kExportAtWhichTime);
+  params.m_exportInWorldSpace = options.getBool(kExportInWorldSpace);
   params.m_subSamples = options.getInt(kSubSamples);
 
   if(params.m_animation)

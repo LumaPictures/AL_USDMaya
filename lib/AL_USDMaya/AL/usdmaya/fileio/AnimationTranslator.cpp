@@ -176,11 +176,14 @@ bool AnimationTranslator::isAnimatedMesh(const MDagPath& mesh)
     MItDependencyGraph::kDepthFirst,
     MItDependencyGraph::kNodeLevel,
     &status);
+
   if (!status)
   {
     MGlobal::displayError("Unable to create DG iterator");
     return false;
   }
+  iter.setTraversalOverWorldSpaceDependents(true);
+
   for (; !iter.isDone(); iter.next())
   {
     MObject currNode = iter.thisPlug().node();
@@ -266,7 +269,8 @@ void AnimationTranslator::exportAnimation(const ExporterParams& params)
   if((startAttrib != endAttrib) ||
      (startAttribScaled != endAttribScaled) ||
      (startTransformAttrib != endTransformAttrib) ||
-     (startMesh != endMesh))
+     (startMesh != endMesh) ||
+     (!m_animatedNodes.empty()))
   {
     double increment = 1.0 / std::max(1U, params.m_subSamples);
     for(double t = params.m_minFrame, e = params.m_maxFrame + 1e-3f; t < e; t += increment)
@@ -298,6 +302,10 @@ void AnimationTranslator::exportAnimation(const ExporterParams& params)
         UsdGeomMesh mesh(it->second.GetPrim());
         AL::usdmaya::utils::MeshExportContext context(it->first, mesh, timeCode);
         context.copyVertexData(timeCode);
+      }
+      for(auto nodeAnim : m_animatedNodes)
+      {
+        nodeAnim.m_translator->exportCustomAnim(nodeAnim.m_path, nodeAnim.m_prim, timeCode);
       }
     }
   }
