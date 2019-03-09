@@ -485,21 +485,6 @@ ProxyShape* ProxyDrawOverride::getShape(const MDagPath& objPath)
   return static_cast<ProxyShape*>(dnNode.userNode());
 }
 
-//----------------------------------------------------------------------------------------------------------------------
-class ProxyDrawOverrideSelectionHelper
-{
-public:
-
-  static SdfPath path_ting(const SdfPath& a, const SdfPath& b, const int c)
-  {
-    m_paths.push_back(a);
-    return a;
-  }
-  static SdfPathVector m_paths;
-};
-SdfPathVector ProxyDrawOverrideSelectionHelper::m_paths;
-
-
 #if MAYA_API_VERSION >= 20190000
 //----------------------------------------------------------------------------------------------------------------------
 bool ProxyDrawOverride::userSelect(
@@ -553,12 +538,11 @@ bool ProxyDrawOverride::userSelect(
   UsdImagingGLRenderParams params;
 
   auto* proxyShape = static_cast<ProxyShape*>(getShape(objPath));
-  auto engine = proxyShape->engine();
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();
 
-  Engine::HitBatch hitBatch;
+  ProxyShape::HitBatch hitBatch;
   SdfPathVector rootPath;
   rootPath.push_back(root.GetPath());
 
@@ -567,35 +551,20 @@ bool ProxyDrawOverride::userSelect(
   if (resolution < 10) { resolution = 10; }
   if (resolution > 1024) { resolution = 1024; }
 
-
-  bool hitSelected = engine->TestIntersectionBatch(
+  bool hitSelected = proxyShape->findPickedPrims(
           GfMatrix4d(worldViewMatrix.matrix),
           GfMatrix4d(projectionMatrix.matrix),
           worldToLocalSpace,
           rootPath,
           params,
+          selectInfo.singleSelection(),
           resolution,
-          ProxyDrawOverrideSelectionHelper::path_ting,
-          &hitBatch);
+          hitBatch);
 
   auto selected = false;
 
-  auto getHitPath = [&engine] (Engine::HitBatch::const_reference& it) -> SdfPath
-  {
-    const Engine::HitInfo& hit = it.second;
-    auto path = engine->GetPrimPathFromInstanceIndex(it.first, hit.hitInstanceIndex);
-    if (!path.IsEmpty())
-    {
-      return path;
-    }
-
-    return it.first.StripAllVariantSelections();
-  };
-
-
   auto addSelection = [&hitBatch, &selectInfo, &selectionList,
-    &worldSpaceHitPts, proxyShape, &selected,
-    &getHitPath] (const MString& command)
+    &worldSpaceHitPts, proxyShape, &selected] (const MString& command)
   {
     selected = true;
     MStringArray nodes;
@@ -603,14 +572,14 @@ bool ProxyDrawOverride::userSelect(
     
     for(const auto& it : hitBatch)
     {
-      auto path = getHitPath(it).StripAllVariantSelections();
+      auto path = it.first.StripAllVariantSelections();
       auto obj = proxyShape->findRequiredPath(path);
       if (obj != MObject::kNullObj) 
       {
         MFnDagNode dagNode(obj);
         MDagPath dg;
         dagNode.getPath(dg);
-        const double* p = it.second.worldSpaceHitPoint.GetArray();
+        const double* p = it.second.GetArray();
         
         selectionList.add(dg);
         worldSpaceHitPts.append(MPoint(p[0], p[1], p[2]));
@@ -659,9 +628,8 @@ bool ProxyDrawOverride::userSelect(
 
       for(const auto& it : hitBatch)
       {
-        auto path = getHitPath(it);
         command += " -pp \"";
-        command += path.GetText();
+        command += it.first.GetText();
         command += "\"";
       }
 
@@ -687,51 +655,9 @@ bool ProxyDrawOverride::userSelect(
     if (!hitBatch.empty())
     {
       paths.reserve(hitBatch.size());
-
-      auto addHit = [&engine, &paths, &getHitPath](Engine::HitBatch::const_reference& it)
+      for (const auto& it : hitBatch)
       {
-        paths.push_back(getHitPath(it));
-      };
-
-      // Do to the inaccuracies in the selection method in gl engine
-      // we still need to find the closest selection.
-      // Around the edges it often selects two or more prims.
-      if (selectInfo.singleSelection())
-      {
-        auto closestHit = hitBatch.cbegin();
-
-        if (hitBatch.size() > 1)
-        {
-          MDagPath cameraPath;
-          M3dView::active3dView().getCamera(cameraPath);
-          const auto cameraPoint = cameraPath.inclusiveMatrix() * MPoint(0.0, 0.0, 0.0, 1.0);
-          auto distanceToCameraSq = [&cameraPoint] (Engine::HitBatch::const_reference& it) -> double
-          {
-            const auto dx = cameraPoint.x - it.second.worldSpaceHitPoint[0];
-            const auto dy = cameraPoint.y - it.second.worldSpaceHitPoint[1];
-            const auto dz = cameraPoint.z - it.second.worldSpaceHitPoint[2];
-            return dx * dx + dy * dy + dz * dz;
-          };
-
-          auto closestDistance = distanceToCameraSq(*closestHit);
-          for (auto it = ++hitBatch.cbegin(), itEnd = hitBatch.cend(); it != itEnd; ++it)
-          {
-            const auto currentDistance = distanceToCameraSq(*it);
-            if (currentDistance < closestDistance)
-            {
-              closestDistance = currentDistance;
-              closestHit = it;
-            }
-          }
-        }
-        addHit(*closestHit);
-      }
-      else
-      {
-        for (const auto& it : hitBatch)
-        {
-          addHit(it);
-        }
+        paths.push_back(it.first);
       }
     }
 
@@ -937,8 +863,6 @@ bool ProxyDrawOverride::userSelect(
 #endif
   }
 
-  ProxyDrawOverrideSelectionHelper::m_paths.clear();
-  
   return selected;
 }
 #endif
