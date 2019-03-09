@@ -1,4 +1,7 @@
 add_subdirectory(AL_USDMayaPlugin)
+if(CMAKE_WANT_UFE_BUILD)
+  add_subdirectory(AL_USDMayaUFEPlugin)
+endif()
 if(NOT SKIP_USDMAYA_TESTS)
   add_subdirectory(AL_USDMayaTestPlugin)
 endif()
