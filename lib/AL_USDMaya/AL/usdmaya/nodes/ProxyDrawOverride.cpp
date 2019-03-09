@@ -54,7 +54,7 @@ public:
 
   // Constructor to use when shape is drawn but no bounding box.
   RenderUserData()
-    : MUserData(false)
+    : MUserData(true)
     {}
 
   // Make sure everything gets freed!
