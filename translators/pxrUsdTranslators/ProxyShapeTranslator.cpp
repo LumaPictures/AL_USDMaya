@@ -20,6 +20,7 @@
 #include "AL/maya/utils/Utils.h"
 #include "AL/usdmaya/fileio/translators/TranslatorBase.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
+#include "AL/usdmaya/DebugCodes.h"
 
 #include "usdMaya/jobArgs.h"
 #include "usdMaya/primWriterArgs.h"
@@ -33,7 +34,9 @@
 #include "pxr/usd/sdf/types.h"
 #include "pxr/usd/sdf/copyUtils.h"
 #include "pxr/usd/usd/modelAPI.h"
+#include "pxr/usd/usdGeom/tokens.h"
 #include "pxr/usd/usdGeom/xformable.h"
+#include "pxr/usd/usdGeom/xformOp.h"
 
 PXR_NAMESPACE_OPEN_SCOPE
 
@@ -77,32 +80,6 @@ AL_USDMayaTranslatorProxyShape::Create(
     refPrimPathStr = AL::maya::utils::convert(usdRefPrimPathPlg.asString());
   }
 
-  // Get proxy shape stage and graft session layer onto exported layer.
-  // Do this before authoring anything to prim because CopySpec will
-  // replace any scene description.
-  UsdStageRefPtr shapeStage = proxyShape->usdStage();
-  if (shapeStage)
-  {
-    SdfPath srcPrimPath;
-    if (!refPrimPathStr.empty())
-    {
-      srcPrimPath = SdfPath(refPrimPathStr);
-    }
-    else
-    {
-      srcPrimPath = shapeStage->GetDefaultPrim().GetPath();
-    }
-    if (shapeStage->GetSessionLayer()->GetPrimAtPath(srcPrimPath)){
-      // Use custom Fn ShouldGraftValue to non-destructively copy specs.
-      // This will preserve Xform type if transform writer has already run on
-      // the prim because we are merging xform + shape.
-      SdfCopySpec(shapeStage->GetSessionLayer(), srcPrimPath,
-                  stage->GetRootLayer(), authorPath,
-                  _ShouldGraftValue,
-                  _ShouldGraftChildren);
-    }
-  }
-
   // Guard against a situation where the prim being referenced has
   // xformOp's specified in its xformOpOrder but the reference assembly
   // in Maya has an identity transform. We would normally skip writing out
@@ -118,6 +95,103 @@ AL_USDMayaTranslatorProxyShape::Create(
   if (orderedXformOps.empty() && !resetsXformStack)
   {
     xformable.CreateXformOpOrderAttr().Block();
+  }
+
+  // Get proxy shape stage and graft session layer onto exported layer.
+  // Do this before authoring anything to prim because CopySpec will
+  // replace any scene description.
+  UsdStageRefPtr shapeStage = proxyShape->usdStage();
+  SdfPrimSpecHandle sessionSpec;
+  if (shapeStage)
+  {
+    SdfPath srcPrimPath;
+    if (!refPrimPathStr.empty())
+    {
+      srcPrimPath = SdfPath(refPrimPathStr);
+    }
+    else
+    {
+      srcPrimPath = shapeStage->GetDefaultPrim().GetPath();
+    }
+
+    sessionSpec = shapeStage->GetSessionLayer()->GetPrimAtPath(srcPrimPath);
+    if (sessionSpec)
+    {
+      // Since there are currently some bugs with selectively copying properties in SdfCopySpec,
+      // We just copy the children of the srcPrimPath. Below we will explicitly
+      // copy any transformation ops because those are the most common, but ideally we would
+      // copy specs for the root onto the authorPath also. (We would filter xforms so they
+      // could still be appended below).
+      TF_FOR_ALL(child, shapeStage->GetSessionLayer()->GetPrimAtPath(srcPrimPath)->GetNameChildren())
+      {
+        SdfCopySpec(shapeStage->GetSessionLayer(), child->GetSpec().GetPath(),
+                    stage->GetRootLayer(), authorPath.AppendChild(child->GetSpec().GetNameToken()));
+      }
+    }
+  }
+
+  // Append any xformOps from the session layer root prim onto the stage.
+  // This will ensure we produce the same usd result as is displayed in maya.
+  if (sessionSpec)
+  {
+    // If xforms exist both on the maya node and on the target prim of the
+    // session layer, we want to add a suffix to the maya transformations.
+    // Otherwise we just add the prim transformations in.
+    TfToken suffix;
+    suffix = (orderedXformOps.empty() ? TfToken() : TfToken("maya_merged"));
+
+    std::vector<SdfPropertySpec> opProps;
+    if (SdfPropertySpecHandle sessionSpecOpOrder = sessionSpec->GetPropertyAtPath(SdfPath(".xformOpOrder")))
+    {
+      if (sessionSpecOpOrder->HasDefaultValue())
+      {
+        // UsdGeomXformOp::_tokens->inverseXformOpPrefix
+        TfToken inverseXformOpPrefix("!invert!");
+
+        VtTokenArray opTokValues;
+        opTokValues = sessionSpecOpOrder->GetDefaultValue().Get<VtTokenArray>();
+        // Add the additional session spec ops in the proper order
+        for (const auto& opTokenValue: opTokValues)
+        {
+          SdfPath relativePropPath("." + opTokenValue.GetString());
+          if (SdfPropertySpecHandle prop = sessionSpec->GetPropertyAtPath(relativePropPath))
+          {
+            TF_AXIOM(UsdGeomXformOp::IsXformOp(prop->GetNameToken()));
+            TF_DEBUG(ALUSDMAYA_TRANSLATORS).Msg("Copying op from root session spec: %s, %s",
+                                                sessionSpec->GetPath().GetText(), prop->GetName().c_str());
+            if (prop->HasDefaultValue())
+            {
+              std::vector<TfToken> opNameComponents = SdfPath::TokenizeIdentifierAsTokens(prop->GetName());
+
+              bool isInverse;
+              TfToken opTypeToken;
+              if (opNameComponents[0] == inverseXformOpPrefix)
+              {
+                isInverse = true;
+                opTypeToken = opNameComponents[2];
+              }
+              else
+              {
+                isInverse = false;
+                opTypeToken = opNameComponents[1];
+              }
+
+              UsdGeomXformOp op;
+              op = xformable.AddXformOp(UsdGeomXformOp::GetOpTypeEnum(opTypeToken),
+                                        UsdGeomXformOp::GetPrecisionFromValueTypeName(prop->GetTypeName()),
+                                        suffix,
+                                        isInverse);
+              if (!isInverse)
+              {
+                // Note that there is a limitation here where we can only supports static transforms,
+                // but for now that is also a limitation with AL_usdmaya_Transforms in general.
+                op.Set(prop->GetDefaultValue(), UsdTimeCode::Default());
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   MPlug usdRefFilepathPlg = proxyShape->filePathPlug();

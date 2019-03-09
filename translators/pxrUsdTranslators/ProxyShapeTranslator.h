@@ -34,36 +34,6 @@ struct AL_USDMayaTranslatorProxyShape {
   static bool Create(
           const UsdMayaPrimWriterArgs& args,
           UsdMayaPrimWriterContext* context);
-
-private:
-  /// Return true if \p field should be copied from the spec at \p srcPath in
-  /// \p srcLayer to the spec at \p dstPath in \p dstLayer.
-  /// This version overrides the default behavior to preserve values that
-  /// already exist on dest if source does not have them (otherwise they
-  /// would be cleared).
-  static bool _ShouldGraftValue(SdfSpecType specType,
-                                 const TfToken& field,
-                                 const SdfLayerHandle& srcLayer,
-                                 const SdfPath& srcPath,
-                                 bool fieldInSrc,
-                                 const SdfLayerHandle& dstLayer,
-                                 const SdfPath& dstPath,
-                                 bool fieldInDst,
-                                 boost::optional<VtValue>* valueToCopy){
-    // SdfShouldCopyValueFn copies everything by default
-    return (!fieldInDst && fieldInSrc);
-  }
-
-  static bool
-  _ShouldGraftChildren(
-          const TfToken& childrenField,
-          const SdfLayerHandle& srcLayer, const SdfPath& srcPath, bool fieldInSrc,
-          const SdfLayerHandle& dstLayer, const SdfPath& dstPath, bool fieldInDst,
-          boost::optional<VtValue>* srcChildren,
-          boost::optional<VtValue>* dstChildren){
-    // SdfShouldCopyChildrenFn copies everything by default
-    return true;
-  }
 };
 
 
