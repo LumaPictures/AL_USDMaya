@@ -15,6 +15,14 @@ list(APPEND CMAKE_MODULE_PATH
 find_package(USD REQUIRED)
 include(${USD_CONFIG_FILE})
 
+# allow for separate builds of usd/pxrUsdMaya
+if (USD_MAYA_INCLUDE_DIR AND NOT USD_MAYA_INCLUDE_DIR STREQUAL USD_INCLUDE_DIR)
+    include_directories(${USD_MAYA_INCLUDE_DIR})
+endif()
+if (USD_MAYA_LIBRARY_DIR AND NOT USD_MAYA_LIBRARY_DIR STREQUAL USD_LIBRARY_DIR)
+    link_directories(${USD_MAYA_LIBRARY_DIR})
+endif()
+
 # to get PYTHON_EXECUTABLE
 find_package(PythonInterp)
 
@@ -38,7 +46,8 @@ endif()
 
 include_directories(${MAYA_INCLUDE_DIRS})
 
-include_directories(${PXR_INCLUDE_DIRS})
+include_directories(${PXR_INCLUDE_DIRS} ${PXR_CMAKE_DIR}/third_party/maya/include)
+link_directories(${PXR_CMAKE_DIR}/third_party/maya/lib)
 
 # FindBoost is particularly buggy, and doesn't like custom boost locations.
 # Adding specific components forces calls to _Boost_find_library, which

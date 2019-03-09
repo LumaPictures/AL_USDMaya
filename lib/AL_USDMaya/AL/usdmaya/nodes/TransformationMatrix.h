@@ -17,14 +17,15 @@
 
 #include "../Api.h"
 
-#include "AL/usdmaya/TransformOperation.h"
-
 #include "maya/MPxTransformationMatrix.h"
 #include "maya/MPxTransform.h"
 
 #include "pxr/pxr.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
+#include "usdMaya/xformStack.h"
+
+#include <unordered_set>
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -45,7 +46,8 @@ class TransformationMatrix
   UsdGeomXform m_xform;
   UsdTimeCode m_time;
   std::vector<UsdGeomXformOp> m_xformops;
-  std::vector<TransformOperation> m_orderedOps;
+  UsdMayaXformStack::OpClassList m_orderedOps;
+  std::vector<size_t> m_orderedOpMayaIndices;
   MObjectHandle m_transformNode;
 
   // tweak values. These are applied on top of the USD transform values to produce the final result.
@@ -74,15 +76,15 @@ class TransformationMatrix
   MVector m_localTranslateOffset;
 
   // methods that will insert a transform op into the ordered queue of operations, if for some.
-  void insertTranslateOp();
-  void insertScaleOp();
-  void insertShearOp();
-  void insertScalePivotOp();
-  void insertScalePivotTranslationOp();
-  void insertRotateOp();
-  void insertRotatePivotOp();
-  void insertRotatePivotTranslationOp();
-  void insertRotateAxesOp();
+  MStatus insertTranslateOp();
+  MStatus insertScaleOp();
+  MStatus insertShearOp();
+  MStatus insertScalePivotOp();
+  MStatus insertScalePivotTranslationOp();
+  MStatus insertRotateOp();
+  MStatus insertRotatePivotOp();
+  MStatus insertRotatePivotTranslationOp();
+  MStatus insertRotateAxesOp();
 
   enum Flags
   {
@@ -93,9 +95,12 @@ class TransformationMatrix
     kAnimatedMatrix = 1 << 3,
     kAnimatedShear = 1 << 4,
 
-    // are the transform ops coming from a matrix, the PXR schema, or from the maya schema (no flags set)
+    // are the transform ops coming from a matrix, the maya schema, the common schema,
+    // or none of the above (no flags set)?
     kFromMatrix = 1 << 8,
     kFromMayaSchema = 1 << 9,
+    kSinglePivotSchema = 1 << 10,
+    kAnyKnownSchema = kFromMatrix | kFromMayaSchema | kSinglePivotSchema,
 
     // which transform components are present in the prim?
     kPrimHasScale = 1 << 16,
@@ -140,6 +145,16 @@ class TransformationMatrix
   bool internal_pushMatrix(const MMatrix& result, UsdGeomXformOp& op) { return pushMatrix(result, op, getTimeCode()); }
 
 public:
+
+  /// \brief  Return a static reference to a Xform Stack similar to the MayaStack, but with a single pivot
+  ///         Exists as a "bridge" between the CommonStack and the MayaStack. Having this stack allows
+  ///         this plugin to keep using the "original" xform ops as much as possible, until required
+  ///         to change them; otherwise, as soon as any non-CommonStack-compatible op was inserted, we
+  ///         would need to switch to a MayaStack, which would mean splitting the singular pivot to
+  ///         separate rotatePivot and scalePivot.
+  /// return  A UsdMayaXformStack that is similar to a MayaStack, but with a single pivot; a MayaStack
+  ///         and will have an equivalent MayaSinglePivotStack if the rotatePivot == scalePivot
+  static const UsdMayaXformStack& MayaSinglePivotStack();
 
   /// \brief  sets the MObject for the transform
   /// \param  object the MObject for the custom transform node
@@ -279,8 +294,10 @@ public:
   TransformationMatrix(const UsdPrim& prim);
 
   /// \brief  set the prim that this transformation matrix will read/write to.
+  ///         Renamed to "setPrimInternal" to emphasize that you should generally use
+  ///         Transform::setPrim (and only it will call setPrimInternal)
   /// \param  prim the prim
-  void setPrim(const UsdPrim& prim, Transform* transformNode);
+  void setPrimInternal(const UsdPrim& prim, Transform* transformNode);
 
   /// \brief  If set to true, modifications to these transform attributes will be pushed back onto the original prim.
   /// \param  enabled true will cause changes to this transform update the values on the USD prim. False will mean that
@@ -421,6 +438,38 @@ public:
   void pushToPrim();
 
 private:
+  /// Used to populate m_orderedOpMayaIndices when it is actually needed
+  /// (since many / most xforms will never be altered, would be waste to
+  /// do this for all xforms)
+  void buildOrderedOpMayaIndices();
+
+  /// Will see if we need to split a singular pivot (from a CommonStack) into separate
+  /// rotatePivot and scalePivot (from a MayaStack), and do so if needed.  The return
+  /// result will be false if a "normal" rotatePivot or scalePivot insertOp should proceed,
+  /// and true if it is no longer needed.
+  ///
+  /// More precisely, it will be true if EITHER:
+  /// a) it already has a singular pivot, and no split is needed (because the rotatePivot
+  ///    and scale pivot are the same)
+  /// OR
+  /// b) it has a singular pivot, but the rotatePivot and scalePivot have diverged; in this
+  ///    case, it will remove the singular pivot, and insert both a rotatePivot and scalePivot...
+  ///    in which case, we no longer need to insert a rotatePivot or scalePivot, because
+  ///    this function has inserted both for you
+  bool splitPivotIfNeeded();
+
+  MStatus removeOp(
+      const TfToken& opName,
+      Flags oldFlag);
+
+  // Used by various insert*Op methods
+  MStatus insertOp(
+      UsdGeomXformOp::Type opType,
+      UsdGeomXformOp::Precision precision,
+      const TfToken& opName,
+      Flags newFlag,
+      bool insertAtBeginning=false);
+
   //  Translation methods:
   MStatus translateTo(const MVector &vector, MSpace::Space = MSpace::kTransform) override;
 

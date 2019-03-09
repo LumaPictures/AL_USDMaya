@@ -10,9 +10,9 @@ list(APPEND AL_maya_test_source
         plugin.cpp
         AL/maya/test_DiffCore.cpp
         AL/maya/test_EventHandler.cpp
-        AL/maya/test_MatrixToSRT.cpp
         AL/maya/test_MayaEventManager.cpp
         AL/usdmaya/commands/test_ExportCommands.cpp
+        AL/usdmaya/commands/test_ImportCommands.cpp
         AL/usdmaya/commands/test_LayerCommands.cpp
         AL/usdmaya/commands/test_ProxyShapeSelect.cpp
         AL/usdmaya/commands/test_InternalProxySelection.cpp
