@@ -103,6 +103,8 @@ public:
   AL_USDMAYA_PUBLIC
   static ProxyShape* getShape(const MDagPath& objPath);
 
+  bool isTransparent() const override { return true; }
+
   /// \brief  We support the legacy and VP2 core profile rendering.
   /// \return MHWRender::kOpenGL | MHWRender::kOpenGLCoreProfile
   MHWRender::DrawAPI supportedDrawAPIs() const override
