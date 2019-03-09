@@ -24,6 +24,7 @@
 #include "AL/event/EventHandler.h"
 #include "AL/maya/event/MayaEventManager.h"
 #include <AL/usdmaya/SelectabilityDB.h>
+#include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/DrivenTransformsData.h"
 #include "AL/usdmaya/fileio/translators/TranslatorBase.h"
 #include "AL/usdmaya/fileio/translators/TranslatorContext.h"
@@ -867,14 +868,6 @@ public:
   AL_USDMAYA_PUBLIC
   void loadStage();
 
-  /// \brief  adds the attribute changed callback to the proxy shape
-  AL_USDMAYA_PUBLIC
-  void addAttributeChangedCallback();
-
-  /// \brief  removes the attribute changed callback from the proxy shape
-  AL_USDMAYA_PUBLIC
-  void removeAttributeChangedCallback();
-
   AL_USDMAYA_PUBLIC
   void constructLockPrims();
 
@@ -924,7 +917,10 @@ public:
 
   /// \brief  Clears the bounding box cache of the shape
   inline void clearBoundingBoxCache()
-    { m_boundingBoxCache.clear(); }
+  {
+    m_boundingBoxCache.clear();
+    TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Clearing bounding box cache\n");
+  }
 
 private:
 
@@ -1051,6 +1047,8 @@ private:
 
   void postConstructor() override;
   MStatus compute(const MPlug& plug, MDataBlock& dataBlock) override;
+  bool setInternalValue(const MPlug& plug, const MDataHandle& dataHandle) override;
+  bool getInternalValue(const MPlug& plug, MDataHandle& dataHandle) override;
   MStatus setDependentsDirty(const MPlug& plugBeingDirtied, MPlugArray& plugs) override;
   bool isBounded() const override;
   #if MAYA_API_VERSION < 201700
@@ -1124,8 +1122,6 @@ private:
   TfNotice::Key m_editTargetChanged;
 
   mutable std::map<UsdTimeCode, MBoundingBox> m_boundingBoxCache;
-  AL::event::CallbackId m_beforeSaveSceneId = -1;
-  MCallbackId m_attributeChanged = 0;
   MCallbackId m_onSelectionChanged = 0;
   SdfPathVector m_excludedGeometry;
   SdfPathVector m_excludedTaggedGeometry;
