@@ -19,7 +19,6 @@
 #include "AL/usdmaya/fileio/NodeFactory.h"
 #include "AL/usdmaya/fileio/translators/TransformTranslator.h"
 #include "AL/usdmaya/Metadata.h"
-#include "AL/usdmaya/TransformOperation.h"
 #include "AL/usdmaya/utils/MeshUtils.h"
 #include "AL/usdmaya/utils/Utils.h"
 #include "AL/maya/utils/Utils.h"
