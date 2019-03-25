@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 #include "test_usdmaya.h"
-#include "AL/usdmaya/utils/Utils.h"
+#include "AL/maya/utils/Utils.h"
 
 #include "pxr/usd/usdGeom/xformable.h"
 
@@ -22,6 +22,7 @@
 #include "maya/MGlobal.h"
 #include "maya/MFileIO.h"
 #include "maya/MFnTransform.h"
+#include "maya/MMatrix.h"
 #include "maya/MSelectionList.h"
 
 #include <iostream>
