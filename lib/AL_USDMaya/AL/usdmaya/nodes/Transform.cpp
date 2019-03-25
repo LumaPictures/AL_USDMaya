@@ -20,6 +20,8 @@
 #include "AL/usdmaya/nodes/Transform.h"
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
 
+#include "pxr/usd/usdGeom/mesh.h"
+
 #include "maya/MBoundingBox.h"
 #include "maya/MGlobal.h"
 #include "maya/MTime.h"
