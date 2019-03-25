@@ -22,6 +22,8 @@
 #include "AL/usdmaya/nodes/ProxyShape.h"
 #include "AL/usdmaya/DebugCodes.h"
 
+#include "maya/MTime.h"
+
 #include "usdMaya/jobArgs.h"
 #include "usdMaya/primWriterArgs.h"
 #include "usdMaya/primWriterContext.h"

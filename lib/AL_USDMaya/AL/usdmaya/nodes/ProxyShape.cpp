@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+/*
 #include "pxr/usdImaging/usdImaging/delegate.h"
 #include "pxr/usdImaging/usdImaging/version.h"
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 
-#include "AL/usdmaya/nodes/Engine.h"
-
+*/
 #if (__cplusplus >= 201703L)
 # include <filesystem>
 #else
@@ -34,49 +34,47 @@ typedef boost::filesystem::path path;
 #endif
 }
 }
+#include "maya/MEvaluationNode.h"
+#include "maya/MEventMessage.h"
+#include "maya/MFileIO.h"
+#include "maya/MItDependencyNodes.h"
+#include "maya/MFnPluginData.h"
+#include "maya/MFnReference.h"
+#include "maya/MGlobal.h"
+#include "maya/MHWGeometryUtilities.h"
+#include "maya/MNodeClass.h"
+#include "maya/MTime.h"
+#include "maya/MViewport2Renderer.h"
 
+#include "AL/maya/utils/Utils.h"
+
+#include "AL/usdmaya/cmds/ProxyShapePostLoadProcess.h"
 #include "AL/usdmaya/CodeTimings.h"
-#include "AL/usdmaya/utils/Utils.h"
-
-#include "AL/usdmaya/DebugCodes.h"
+#include "AL/usdmaya/DrivenTransformsData.h"
 #include "AL/usdmaya/Global.h"
 #include "AL/usdmaya/Metadata.h"
+#include "AL/usdmaya/fileio/SchemaPrims.h"
+#include "AL/usdmaya/fileio/TransformIterator.h"
+#include "AL/usdmaya/nodes/Engine.h"
+#include "AL/usdmaya/nodes/LayerManager.h"
+#include "AL/usdmaya/nodes/ProxyShape.h"
+#include "AL/usdmaya/nodes/RendererManager.h"
+#include "AL/usdmaya/nodes/Transform.h"
+#include "AL/usdmaya/nodes/TransformationMatrix.h"
 #include "AL/usdmaya/StageCache.h"
 #include "AL/usdmaya/StageData.h"
 #include "AL/usdmaya/TypeIDs.h"
-
-#include "AL/usdmaya/cmds/ProxyShapePostLoadProcess.h"
-#include "AL/usdmaya/fileio/SchemaPrims.h"
-#include "AL/usdmaya/fileio/TransformIterator.h"
-#include "AL/usdmaya/nodes/LayerManager.h"
-#include "AL/usdmaya/nodes/RendererManager.h"
-#include "AL/usdmaya/nodes/ProxyShape.h"
-#include "AL/usdmaya/nodes/Transform.h"
-#include "AL/usdmaya/nodes/TransformationMatrix.h"
-#include "AL/usdmaya/nodes/proxy/PrimFilter.h"
 #include "AL/usdmaya/Version.h"
-#include "AL/usd/utils/ForwardDeclares.h"
+#include "AL/usdmaya/utils/Utils.h"
 
-#include "maya/MFileIO.h"
-#include "maya/MFnPluginData.h"
-#include "maya/MFnReference.h"
-#include "maya/MHWGeometryUtilities.h"
-#include "maya/MItDependencyNodes.h"
-#include "maya/MPlugArray.h"
-#include "maya/MNodeClass.h"
-#include "maya/MFileIO.h"
-#include "maya/MCommandResult.h"
-
-#include "pxr/base/arch/systemInfo.h"
-#include "pxr/base/tf/fileUtils.h"
 #include "pxr/usd/ar/resolver.h"
-#include "pxr/usd/usd/stageCacheContext.h"
-#include "pxr/usdImaging/usdImaging/primAdapter.h"
-#include "pxr/usdImaging/usdImaging/meshAdapter.h"
-#include "pxr/usd/usdUtils/stageCache.h"
 
-#include <algorithm>
-#include <iterator>
+#include "pxr/usd/usdGeom/imageable.h"
+#include "pxr/usd/usdGeom/tokens.h"
+#include "pxr/usd/usd/prim.h"
+#include "pxr/usd/usd/stageCacheContext.h"
+#include "pxr/usd/usdUtils/stageCache.h"
+#include "pxr/usdImaging/usdImaging/delegate.h"
 
 #if defined(WANT_UFE_BUILD)
 #include "ufe/path.h"
@@ -801,9 +799,8 @@ MStatus ProxyShape::initialise()
     m_serializedRefCounts = addStringAttr("serializedRefCounts", "strcs", kReadable | kWritable | kStorable | kHidden);
 
     m_version = addStringAttr(
-        "version", "vrs", getVersion().c_str(),
-        kReadable | kStorable | kHidden
-        );
+        "version", "vrs", getVersion(),
+        kReadable | kStorable | kHidden);
 
     MNodeClass nc("transform");
     m_transformTranslate = nc.attribute("t");
@@ -1038,7 +1035,8 @@ void ProxyShape::onObjectsChanged(UsdNotice::ObjectsChanged const& notice, UsdSt
   for(const SdfPath& path : resyncedPaths)
   {
     auto it = m_requiredPaths.find(path);
-    if(it != m_requiredPaths.end()){
+    if(it != m_requiredPaths.end())
+    {
       UsdPrim newPrim = m_stage->GetPrimAtPath(path);
       Transform* tm = it->second.transform();
       if(!tm)
@@ -1158,8 +1156,11 @@ void ProxyShape::onObjectsChanged(UsdNotice::ObjectsChanged const& notice, UsdSt
     constructLockPrims();
   }
 
-  // Manually trigger a viewport redraw
-  MGlobal::executeCommand("refresh");
+  if(m_compositionHasChanged)
+  {
+    // Manually trigger a viewport redraw
+    MGlobal::executeCommand("refresh");
+  }
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -2193,7 +2194,7 @@ void ProxyShape::deserialiseTransformRefs()
             const uint32_t selected = tstrs[3].asUnsigned();
             const uint32_t refCounts = tstrs[4].asUnsigned();
             SdfPath path(tstrs[1].asChar());
-            m_requiredPaths.emplace(path, TransformReference(node, required, selected, refCounts));
+            m_requiredPaths.emplace(path, TransformReference(node, ptr, required, selected, refCounts));
             TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::deserialiseTransformRefs m_requiredPaths added AL_usdmaya_Transform TransformReference: %s\n", path.GetText());
           }
           else
@@ -2202,7 +2203,7 @@ void ProxyShape::deserialiseTransformRefs()
             const uint32_t selected = tstrs[3].asUnsigned();
             const uint32_t refCounts = tstrs[4].asUnsigned();
             SdfPath path(tstrs[1].asChar());
-            m_requiredPaths.emplace(path, TransformReference(node, required, selected, refCounts));
+            m_requiredPaths.emplace(path, TransformReference(node, nullptr, required, selected, refCounts));
             TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("ProxyShape::deserialiseTransformRefs m_requiredPaths added TransformReference: %s\n", path.GetText());
           }
         }
@@ -2216,31 +2217,39 @@ void ProxyShape::deserialiseTransformRefs()
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-ProxyShape::TransformReference::TransformReference(MObject mayaNode, uint32_t r, uint32_t s, uint32_t rc)
+ProxyShape::TransformReference::TransformReference(MObject mayaNode, Transform* node, uint32_t r, uint32_t s, uint32_t rc)
   : m_node(mayaNode)
+  , m_transform(nullptr)
 {
   m_required = r;
   m_selected = s;
   m_refCount = rc;
+  m_transform = transform();
 }
 
+//----------------------------------------------------------------------------------------------------------------------
 Transform* ProxyShape::TransformReference::transform() const
 {
-  MObject n(node());
-  if(!n.isNull()){
+  MObjectHandle n(node());
+  if(n.isValid() && n.isAlive())
+  {
     MStatus status;
-    MFnDependencyNode fn(n, &status);
-    if(status == MS::kSuccess){
-      if(fn.typeId() == AL_USDMAYA_TRANSFORM){
+    MFnDependencyNode fn(n.object(), &status);
+    if(status == MS::kSuccess)
+    {
+      if(fn.typeId() == AL_USDMAYA_TRANSFORM)
+      {
         TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformReference::transform found valid AL_usdmaya_Tranform: %s\n", fn.absoluteName().asChar());
         return (Transform*)fn.userNode();
       }
-      else{
+      else
+      {
         TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformReference::transform found non AL_usdmaya_Tranform: %s\n", fn.absoluteName().asChar());
         return nullptr;
       }
     }
-    else{
+    else
+    {
       TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("TransformReference::transform found invalid transform\n");
       return nullptr;
     }

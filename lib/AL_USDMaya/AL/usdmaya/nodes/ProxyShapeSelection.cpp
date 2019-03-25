@@ -13,21 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
+#include "AL/maya/utils/Utils.h"
+
+#include "AL/usdmaya/Metadata.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
 #include "AL/usdmaya/nodes/Engine.h"
 #include "AL/usdmaya/nodes/Transform.h"
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
-#include "AL/usdmaya/TypeIDs.h"
-#include "AL/usdmaya/Metadata.h"
-#include "AL/usdmaya/DebugCodes.h"
 
 #include "maya/MFnDagNode.h"
 #include "maya/MPxCommand.h"
-
-#include <set>
-#include <algorithm>
-#include "AL/usdmaya/utils/Utils.h"
-
 
 namespace AL {
 namespace usdmaya {
@@ -321,11 +316,13 @@ inline bool ProxyShape::TransformReference::checkRef(const TransformReason reaso
 //----------------------------------------------------------------------------------------------------------------------
 inline ProxyShape::TransformReference::TransformReference(const MObject& node, const TransformReason reason)
   : m_node(node)
+  , m_transform(nullptr)
 {
   m_required = 0;
   m_selected = 0;
   m_selectedTemp = 0;
   m_refCount = 0;
+  m_transform = transform();
 }
 
 //----------------------------------------------------------------------------------------------------------------------

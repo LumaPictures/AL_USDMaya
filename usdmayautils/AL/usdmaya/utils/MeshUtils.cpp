@@ -14,11 +14,11 @@
 // limitations under the License.
 //
 #include "AL/maya/utils/Utils.h"
-#include "AL/usdmaya/utils/MeshUtils.h"
 #include "AL/usdmaya/utils/DiffPrimVar.h"
+#include "AL/usdmaya/utils/MeshUtils.h"
 #include "AL/usdmaya/utils/Utils.h"
 #include "AL/usd/utils/DebugCodes.h"
-#include "pxr/usd/usdGeom/tokens.h"
+
 #include "pxr/usd/usdUtils/pipeline.h"
 
 #include "maya/MItMeshPolygon.h"
@@ -241,11 +241,10 @@ void MeshImportContext::gatherFaceConnectsAndVertices()
     if(mesh.GetNormalsInterpolation() == UsdGeomTokens->vertex)
     {
       const float* const iptr = (const float*)normalsData.cdata();
-      normals.setLength(connects.length());
-      for(uint32_t i = 0, nf = connects.length(); i < nf; ++i)
+      normals.setLength(normalsData.size());
+      for(uint32_t i = 0, nf = normalsData.size(); i < nf; ++i)
       {
-        int index = connects[i];
-        normals[i] = MVector(iptr[3 * index], iptr[3 * index + 1], iptr[3 * index + 2]);
+        normals[i] = MVector(iptr[3 * i], iptr[3 * i + 1], iptr[3 * i + 2]);
       }
     }
   }
@@ -507,14 +506,8 @@ bool MeshImportContext::applyVertexNormals()
 {
   if(normals.length())
   {
-
     if(mesh.GetNormalsInterpolation() == UsdGeomTokens->vertex)
-    { 
-      MIntArray vertexIds(normals.length());
-      for(uint32_t i = 0, n = normals.length(); i < n; ++i)
-      {
-        vertexIds[i] = i;
-      }
+    {
       return fnMesh.setFaceVertexNormals(normals, connects, connects, MSpace::kObject) == MS::kSuccess;
     }
     else
@@ -1801,7 +1794,7 @@ void MeshExportContext::copyBindPoseData(UsdTimeCode time)
     UsdGeomPrimvar pRefPrimVarAttr = mesh.CreatePrimvar(
             UsdUtilsGetPrefName(),
             SdfValueTypeNames->Point3fArray,
-            UsdGeomTokens->varying);
+            UsdGeomTokens->vertex);
 
     if(pRefPrimVarAttr)
     {
