@@ -13,17 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 //
-#include "AL/maya/utils/CommandGuiHelper.h"
+
 #include "AL/usdmaya/TypeIDs.h"
 #include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
 #include "AL/usdmaya/nodes/Transform.h"
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
+#include "AL/usdmaya/utils/AttributeType.h"
+#include "AL/usdmaya/utils/Utils.h"
 
 #include "maya/MFileIO.h"
 #include "maya/MViewport2Renderer.h"
-#include "AL/usdmaya/utils/AttributeType.h"
-#include "AL/usdmaya/utils/Utils.h"
 
 PXR_NAMESPACE_USING_DIRECTIVE
 
@@ -1804,10 +1804,11 @@ void TransformationMatrix::pushToPrim()
 
   // Anytime we update the xform, we need to tell the proxy shape that it
   // needs to redraw itself
-  if (!m_transformNode.isNull())
+  MObject tn(m_transformNode.object());
+  if (!tn.isNull())
   {
     MStatus status;
-    MFnDependencyNode mfn(m_transformNode, &status);
+    MFnDependencyNode mfn(tn, &status);
     if (status && mfn.typeId() == Transform::kTypeId)
     {
       auto xform = static_cast<Transform*>(mfn.userNode());

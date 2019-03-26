@@ -14,11 +14,11 @@
 // limitations under the License.
 //
 #include "AL/maya/utils/Utils.h"
-#include "AL/usdmaya/utils/MeshUtils.h"
 #include "AL/usdmaya/utils/DiffPrimVar.h"
+#include "AL/usdmaya/utils/MeshUtils.h"
 #include "AL/usdmaya/utils/Utils.h"
 #include "AL/usd/utils/DebugCodes.h"
-#include "pxr/usd/usdGeom/tokens.h"
+
 #include "pxr/usd/usdUtils/pipeline.h"
 
 #include "maya/MItMeshPolygon.h"
@@ -241,11 +241,10 @@ void MeshImportContext::gatherFaceConnectsAndVertices()
     if(mesh.GetNormalsInterpolation() == UsdGeomTokens->vertex)
     {
       const float* const iptr = (const float*)normalsData.cdata();
-      normals.setLength(connects.length());
-      for(uint32_t i = 0, nf = connects.length(); i < nf; ++i)
+      normals.setLength(normalsData.size());
+      for(uint32_t i = 0, nf = normalsData.size(); i < nf; ++i)
       {
-        int index = connects[i];
-        normals[i] = MVector(iptr[3 * index], iptr[3 * index + 1], iptr[3 * index + 2]);
+        normals[i] = MVector(iptr[3 * i], iptr[3 * i + 1], iptr[3 * i + 2]);
       }
     }
   }
@@ -507,21 +506,28 @@ bool MeshImportContext::applyVertexNormals()
 {
   if(normals.length())
   {
-    MIntArray normalsFaceIds;
-    normalsFaceIds.setLength(connects.length());
-    int32_t* normalsFaceIdsPtr = &normalsFaceIds[0];
-    if (normals.length() == uint32_t(fnMesh.numFaceVertices()))
+    if(mesh.GetNormalsInterpolation() == UsdGeomTokens->vertex)
     {
-      for (uint32_t i = 0, k = 0, n = counts.length(); i < n; i++)
+      return fnMesh.setFaceVertexNormals(normals, connects, connects, MSpace::kObject) == MS::kSuccess;
+    }
+    else
+    {
+      MIntArray normalsFaceIds;
+      normalsFaceIds.setLength(connects.length());
+      int32_t* normalsFaceIdsPtr = &normalsFaceIds[0];
+      if (normals.length() == uint32_t(fnMesh.numFaceVertices()))
       {
-        for (uint32_t j = 0, m = counts[i]; j < m; j++, ++k)
+        for (uint32_t i = 0, k = 0, n = counts.length(); i < n; i++)
         {
-          normalsFaceIdsPtr[k] = i;
+          for (uint32_t j = 0, m = counts[i]; j < m; j++, ++k)
+          {
+            normalsFaceIdsPtr[k] = i;
+          }
         }
       }
-    }
 
-    return fnMesh.setFaceVertexNormals(normals, normalsFaceIds, connects, MSpace::kObject) == MS::kSuccess;
+      return fnMesh.setFaceVertexNormals(normals, normalsFaceIds, connects, MSpace::kObject) == MS::kSuccess;
+    }
   }
   return false;
 }
@@ -1779,6 +1785,7 @@ void MeshExportContext::copyVertexData(UsdTimeCode time)
   }
 }
 
+//----------------------------------------------------------------------------------------------------------------------
 void MeshExportContext::copyBindPoseData(UsdTimeCode time)
 {
   if(diffGeom & kPoints)
@@ -1787,7 +1794,7 @@ void MeshExportContext::copyBindPoseData(UsdTimeCode time)
     UsdGeomPrimvar pRefPrimVarAttr = mesh.CreatePrimvar(
             UsdUtilsGetPrefName(),
             SdfValueTypeNames->Point3fArray,
-            UsdGeomTokens->varying);
+            UsdGeomTokens->vertex);
 
     if(pRefPrimVarAttr)
     {
@@ -1821,6 +1828,9 @@ void MeshExportContext::copyNormalData(UsdTimeCode time)
       const float* normalsData = fnMesh.getRawNormals(&status);
       if(status && numNormals)
       {
+        MIntArray normalCounts, normalIndices;
+        fnMesh.getNormalIds(normalCounts, normalIndices);
+
         // if prim vars are all identical, we have a constant value
         if(usd::utils::vec3AreAllTheSame(normalsData, numNormals))
         {
@@ -1829,6 +1839,66 @@ void MeshExportContext::copyNormalData(UsdTimeCode time)
           normals[0][0] = normalsData[0];
           normals[0][1] = normalsData[1];
           normals[0][2] = normalsData[2];
+          normalsAttr.Set(normals, time);
+        }
+        else
+        if(numNormals != normalIndices.length())
+        {
+          if(usd::utils::compareArray(&normalIndices[0], &faceConnects[0], normalIndices.length(), faceConnects.length()))
+          {
+            VtArray<GfVec3f> normals(numNormals);
+            mesh.SetNormalsInterpolation(UsdGeomTokens->vertex);
+            memcpy((GfVec3f*)normals.data(), normalsData, sizeof(float) * 3 * numNormals);
+            normalsAttr.Set(normals, time);
+          }
+          else
+          {
+            std::unordered_map<uint32_t, uint32_t> missing;
+            bool isPerVertex = true;
+            for(uint32_t i = 0, n = normalIndices.length(); isPerVertex && i < n; ++i)
+            {
+              if(normalIndices[i] != faceConnects[i])
+              {
+                auto it = missing.find(normalIndices[i]);
+                if(it == missing.end())
+                {
+                  missing[normalIndices[i]] = faceConnects[i];
+                }
+                else
+                if(it->second != faceConnects[i])
+                {
+                  isPerVertex = false;
+                }
+              }
+            }
+
+            if(isPerVertex)
+            {
+              VtArray<GfVec3f> normals(numNormals);
+              memcpy((GfVec3f*)normals.data(), normalsData, sizeof(float) * 3 * numNormals);
+              for(auto& c : missing)
+              {
+                const uint32_t orig = c.first;
+                const uint32_t remapped = c.second;
+                const uint32_t index = 3 * orig;
+                const GfVec3f normal(normalsData[index], normalsData[index + 1], normalsData[index + 2]);
+                normals[remapped] = normal;
+              }
+              mesh.SetNormalsInterpolation(UsdGeomTokens->vertex);
+              normalsAttr.Set(normals, time);
+            }
+            else
+            {
+              VtArray<GfVec3f> normals(normalIndices.length());
+              for(uint32_t i = 0, n = normalIndices.length(); i < n; ++i)
+              {
+                const uint32_t index = 3 * normalIndices[i];
+                normals[i] = GfVec3f(normalsData[index], normalsData[index + 1], normalsData[index + 2]);
+              }        
+              mesh.SetNormalsInterpolation(UsdGeomTokens->faceVarying);
+              normalsAttr.Set(normals, time);  
+            }
+          }
         }
         else
         {

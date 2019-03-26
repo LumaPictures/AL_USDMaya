@@ -1,3 +1,82 @@
+## AL_USDMaya-0.32.9 (2019-03-14)
+### Fixed
++ Fixed crash when modifying rotation attributes
++ Fixed erratic rotate tool
+
+## AL_USDMaya-0.32.8 (2019-03-13)
+### Fixed
++ Fixed potential crash on variant switch
++ Fixed problem where plugin translator options would not post the previous settings to the import/export GUI. 
+
+## AL_USDMaya-0.32.7 (2019-03-11)
+### Changed
++ Reverted the TransformReference struct to the state prior to 0.32.2 . This may re-introduce variant switch crashes.
+
+### Fixed
++ No longer incorrectly expanding normals in the per-vertex case.
+
+## AL_USDMaya-0.32.6 (2019-03-11)
+### Changed
++ Refresh command call added at the end of ProxyShape::onObjectsChanged [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/144) (#144 - @[pilarmolinalopez](//github.com/pilarmolinalopez))
++ Some c++11 style foreach loops changed to iterate over refs, instead of values, to avoid copy [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ Replaced removeVariantFromPath in ProxyShapeUI with standard SdfPath:: StripAllVariantSelections [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ Removed an unused opIt var from TransformTranslator [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ ProxyShapeSelection - avoided re-assignment of helper.m_paths = m_selectedPaths on every loop [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ Removed unused if-branch in ProxyDrawOverride::userSelect [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ FindUFE.cmake now detects version (so you can require specific version, and don't need to explicitly set it beforehand) [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/139) (#139 - @[elrond79](//github.com/elrond79))
+
+### Fixed
++ Fixes bug where, in UFE mode, if had a USD hierarchy without any Xform nodes, it would select the
+root anytime you clicked on anything [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ Made sure SelectionEnded event was triggered in toggle mode, even if no changes made [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/142) (#142 - @[elrond79](//github.com/elrond79))
++ ufe selection: check for correct proxy shape before drawing sel highlight [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/141) (#141 - @[elrond79](//github.com/elrond79))
++ Fixed deselect mode of the proxy shape command [PR](https://github.com/AnimalLogic/AL_USDMaya/pull/12) (#12 - @[elrond79](//github.com/elrond79))
+
+## AL_USDMaya-0.32.5 (2019-03-04)
+### Fixed
++ In Maya 2019, The File translator GUI's could end up failing due to an incorrect early return.
++ Bug when exporting normals, for cases where normalIDs need to be considered
+
+## AL_USDMaya-0.32.4 (2019-03-04)
+### Added
++ canBeOverridden method to the translator plugin to identify which plugins can be overridden
+
+## AL_USDMaya-0.32.3 (2019-03-01)
+
+### Changed
+
++ Default values are now set for file translator options.
++ Nurbs Curve: width was never being written
++ Nurbs Curve: Maya dynamic attribute written from Curve shape (consistent with mesh behaviour)
+
+## AL_USDMaya-0.32.2 (2019-03-01)
+### Added
+
++ 3 utility functions used by our internal translators to AL/maya/utils
+
+### Changed
+
++ Fixed crashes during variant switches and prim activation/deactivation
+
+## AL_USDMaya-0.32.0 (2019-02-25)
+### Added
+
+* added exportDescendants virtual method to TranslatorBase - this checks whether children of the exported node should be exported, and early outs if false (defaults to true)
+* support for exporting custom Transforms by calling the appropriate registered translator (previously all transforms were exported with the default Transform Translator
+* A system to allow for plugin translator options to be specified by a plugin
+* Support for export of world space animation data
+* Active/Inactive state on the translator plugins
+* New command AL_usdmaya_ListTranslators
+* New export/import options to specify the translator plugins that are enabled.
+
+### Changed
+
+* Some of the older options (specifically for mesh/camera/etc) have been changed from the hard coded variants, to plugin options.
+
+### Removed
+
+* Removed old (and no longer used) legacy translators
+
 ## AL_USDMaya-0.31.1 (2019-02-21)
 ### Added
 

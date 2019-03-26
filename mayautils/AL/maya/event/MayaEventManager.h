@@ -15,10 +15,8 @@
 //
 #pragma once
 
-#include "./Api.h"
+#include "AL/maya/event/Api.h"
 
-#include <string>
-#include <vector>
 #include "maya/MCommandMessage.h"
 #include "maya/MDagMessage.h"
 #include "maya/MPaintMessage.h"

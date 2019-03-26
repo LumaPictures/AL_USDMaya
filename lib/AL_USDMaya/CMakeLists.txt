@@ -35,10 +35,11 @@ list(APPEND AL_usdmaya_cmds_headers
         AL/usdmaya/cmds/DebugCommands.h
         AL/usdmaya/cmds/EventCommand.h
         AL/usdmaya/cmds/LayerCommands.h
+        AL/usdmaya/cmds/ListTranslators.h
         AL/usdmaya/cmds/ProxyShapeCommands.h
-        AL/usdmaya/cmds/ProxyShapeSelectCommands.h
         AL/usdmaya/cmds/ProxyShapePostLoadProcess.h
         AL/usdmaya/cmds/RendererCommands.h
+        AL/usdmaya/cmds/SyncFileIOGui.h
         AL/usdmaya/cmds/UnloadPrim.h
 )
 list(APPEND AL_usdmaya_cmds_source
@@ -46,10 +47,11 @@ list(APPEND AL_usdmaya_cmds_source
         AL/usdmaya/cmds/DebugCommands.cpp
         AL/usdmaya/cmds/EventCommand.cpp
         AL/usdmaya/cmds/LayerCommands.cpp
+        AL/usdmaya/cmds/ListTranslators.cpp
         AL/usdmaya/cmds/ProxyShapeCommands.cpp
-        AL/usdmaya/cmds/ProxyShapeSelectCommands.cpp
         AL/usdmaya/cmds/ProxyShapePostLoadProcess.cpp
         AL/usdmaya/cmds/RendererCommands.cpp
+        AL/usdmaya/cmds/SyncFileIOGui.cpp
         AL/usdmaya/cmds/UnloadPrim.cpp
 )
 
@@ -113,10 +115,12 @@ list(APPEND AL_usdmaya_nodes_headers
         AL/usdmaya/nodes/Transform.h
         AL/usdmaya/nodes/TransformationMatrix.h
 )
+
 list(APPEND AL_usdmaya_nodes_proxy_headers
         AL/usdmaya/nodes/proxy/DrivenTransforms.h
         AL/usdmaya/nodes/proxy/PrimFilter.h
 )
+
 list(APPEND AL_usdmaya_nodes_source
         AL/usdmaya/nodes/Engine.cpp
         AL/usdmaya/nodes/Layer.cpp
@@ -210,7 +214,8 @@ target_link_libraries(${LIBRARY_NAME}
 
 if(NEED_BOOST_FILESYSTEM)
     target_link_libraries(${LIBRARY_NAME}
-                        ${Boost_FILESYSTEM_LIBRARY})
+                        ${Boost_FILESYSTEM_LIBRARY}
+                        ${Boost_SYSTEM_LIBRARY})
 endif()
 
 install(TARGETS ${LIBRARY_NAME}
