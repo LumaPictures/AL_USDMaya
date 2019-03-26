@@ -22,6 +22,8 @@
 
 #include "pxr/usd/usdGeom/mesh.h"
 
+#include "pxr/usd/usdGeom/mesh.h"
+
 #include "maya/MBoundingBox.h"
 #include "maya/MGlobal.h"
 #include "maya/MTime.h"
