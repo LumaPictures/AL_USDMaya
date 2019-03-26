@@ -312,7 +312,6 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   view.endSelect();
 
   auto* proxyShape = static_cast<ProxyShape*>(surfaceShape());
-  if (!engine) return false;
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();

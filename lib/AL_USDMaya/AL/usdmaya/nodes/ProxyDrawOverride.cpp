@@ -547,7 +547,6 @@ bool ProxyDrawOverride::userSelect(
   UsdImagingGLRenderParams params;
 
   auto* proxyShape = static_cast<ProxyShape*>(getShape(objPath));
-  if (!engine) return false;
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();
