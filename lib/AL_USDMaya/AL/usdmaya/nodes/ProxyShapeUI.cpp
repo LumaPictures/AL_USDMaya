@@ -101,11 +101,6 @@ void ProxyShapeUI::getDrawRequests(const MDrawInfo& drawInfo, bool isObjectAndAc
   MDrawRequest request = drawInfo.getPrototype(*this);
 
   ProxyShape* shape = static_cast<ProxyShape*>(surfaceShape());
-  Engine* engine = shape->engine();
-  if(!engine)
-  {
-    shape->constructGLImagingEngine();
-  }
 
   // add the request to the queue
   requests.add(request);
@@ -317,6 +312,7 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   view.endSelect();
 
   auto* proxyShape = static_cast<ProxyShape*>(surfaceShape());
+  if (!engine) return false;
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();
