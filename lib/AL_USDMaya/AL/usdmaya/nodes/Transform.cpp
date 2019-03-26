@@ -20,6 +20,8 @@
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
 
+#include "pxr/usd/usdGeom/mesh.h"
+
 #include "maya/MBoundingBox.h"
 #include "maya/MDataBlock.h"
 #include "maya/MEvaluationNodeIterator.h"
