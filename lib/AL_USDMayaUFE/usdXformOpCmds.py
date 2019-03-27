@@ -40,6 +40,12 @@ from math import degrees, radians
 # ===========================================================================
 #                           Utils
 # ===========================================================================
+class IncompatibleXformCommonOpOrder(Exception):
+    pass
+
+class IncompatibleXformMatrixOpOrder(Exception):
+    pass
+
 def tuples2dToList(tuples2D):
     listTuples = []
     for i, tuple in enumerate(tuples2D):
@@ -60,6 +66,7 @@ def primToUfeExclusiveXform(prim):
     xform.matrix = tuples2dToList(usdMatrix)
     return xform
 
+# TODO: potentially eliminate this. Order matters in composing xform ops.
 def convertToCompatibleCommonAPI(prim):
     """
         As we are using USD's XformCommonAPI which supports only the following xformOps :
@@ -101,23 +108,58 @@ def convertToCompatibleCommonAPI(prim):
         else:
             # Restore old
             xformable.SetXformOpOrder(xformOps)
-            raise Exception("Incompatible xform op %s:" % op.GetOpName())
+            raise IncompatibleXformCommonOpOrder("Incompatible xform op %s:" % op.GetOpName())
     return primXform
+
+def convertToXformMatrixOp(prim):
+    '''Checks to see if this prim is using an xformOpOrder with a single matrx form,
+    and if so, returns the corresponding xformOp'''
+    xformable = UsdGeom.Xformable(prim)
+    xformOps = xformable.GetOrderedXformOps()
+    if len(xformOps) != 1:
+        raise IncompatibleXformMatrixOpOrder(
+            "Xform can have at most one xformOp to be matrix-xform compatible: %s"
+            % prim.GetName())
+    op = xformOps[0]
+    if op.GetOpType() != UsdGeom.XformOp.TypeTransform:
+        raise IncompatibleXformMatrixOpOrder(
+            "Xform's only op must be of type transform - %s was of type %s"
+            % (op.GetOpName(), op.GetOpType().name))
+    return op
+        
 
 # ===========================================================================
 #                       Translate Operations
 # ===========================================================================
 def translateOp(prim, path, x, y, z,):
-    ''' Absolute translation of the given prim '''
-    primXform = UsdGeom.XformCommonAPI(prim)
-    if not primXform.SetTranslate(Gf.Vec3d(x,y,z)):
-         # This could mean that we have an incompatible xformOp in the stack
-        try:
-            primXform = convertToCompatibleCommonAPI(prim)
-            if not primXform.SetTranslate(Gf.Vec3d(x,y,z)):
-                raise Exception ("Unable to SetTranslate on the 2nd try.")
-        except Exception as e:
-            raise Exception("Failed to translate prim %s - %s" % (str(path), e))
+    ''' Relative translation of the given prim '''
+    try:
+        primXform = UsdGeom.XformCommonAPI(prim)
+        if not primXform or not primXform.SetTranslate(Gf.Vec3d(x,y,z)):
+            # This could mean that we have an incompatible xformOp in the stack
+            try:
+                primXform = convertToCompatibleCommonAPI(prim)
+                translation = primXform.GetXformVectors()[0]
+                translation[0] += x;
+                translation[1] += y;
+                translation[2] += z;                
+                if not primXform.SetTranslate(translation):
+                    raise Exception ("Unable to SetTranslate on the 2nd try.")
+            except IncompatibleXformCommonOpOrder as e:
+                try:
+                    transformOp = convertToXformMatrixOp(prim)
+                    xformMatrix = transformOp.Get()
+                    translation = xformMatrix.ExtractTranslation()
+                    translation[0] += x;
+                    translation[1] += y;
+                    translation[2] += z;
+                    xformMatrix.SetTranslateOnly(translation)
+                    transformOp.Set(xformMatrix)
+                except IncompatibleXformMatrixOpOrder as e:
+                    raise Exception("xformOpOrder not a single matrix, or" 
+                        " XformCommon compatible: %s" % (e,))
+    except Exception as e:
+        raise Exception("Failed to translate prim %s - %s" % (str(path), e))
 
 class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
     '''
