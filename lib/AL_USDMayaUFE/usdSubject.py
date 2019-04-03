@@ -41,6 +41,8 @@ import ufe
 import usdRunTime
 
 import logging
+import textwrap
+import weakref
 
 logger = logging.getLogger(__name__)
 # Subject singleton for observation of all USD stages.
@@ -84,6 +86,7 @@ def isTransform3D(usdChangedPath):
     # string value.
     return usdChangedPath.elementString == '.xformOp:translate'
 
+
 class _StagesSubject(object):
     '''Subject class to observe Maya scene.
 
@@ -93,6 +96,23 @@ class _StagesSubject(object):
     '''
     filePathPlug = OpenMaya.MNodeClass(usdRunTime.kMayaUsdGatewayNodeType) \
         .attribute('filePath')
+        
+    _instances = {}
+    
+    def __new__(cls):
+        self = object.__new__(cls)
+        cls._instances[id(self)] = weakref.ref(self)
+        return self
+        
+    @classmethod
+    def _get_instance(cls, inst_id):
+        ref = cls._instances.get(inst_id)
+        if ref is None:
+            return None
+        inst = ref()
+        if inst is None:
+            del cls._instances[inst_id]
+        return inst
 
     def __init__(self):
         super(_StagesSubject, self).__init__()
@@ -108,7 +128,6 @@ class _StagesSubject(object):
         self._beforeNewCbCalled = False
 
         self._cbIds = []
-        self._nodeCbIds = {}
         cbArgs = [(OpenMaya.MSceneMessage.kBeforeNew, self._beforeNewCb,
                    'before new'),
                   (OpenMaya.MSceneMessage.kBeforeOpen, self._beforeOpenCb,
@@ -117,6 +136,7 @@ class _StagesSubject(object):
                    'after open'),
                   (OpenMaya.MSceneMessage.kAfterNew, self._afterNewCb,
                    'after new')]
+        self._proxyHandlesByHash = {}
 
         for (msg, cb, data) in cbArgs:
             self._cbIds.append(
@@ -126,18 +146,63 @@ class _StagesSubject(object):
             OpenMaya.MDGMessage.addNodeAddedCallback(
                 self._nodeAddedCb,
                 usdRunTime.kMayaUsdGatewayNodeType))
+
         self._cbIds.append(
             OpenMaya.MDGMessage.addNodeRemovedCallback(
                 self._nodeRemovedCb,
                 usdRunTime.kMayaUsdGatewayNodeType))
+        
+    def _addProxy(self, proxyMObj):
+        import random
+        
+        handle = OpenMaya.MObjectHandle(proxyMObj)
+        proxyHash = handle.hashCode()
+        # because the handle hash isn't guaranteed unique, we further index by
+        # a random float to make sure it's unique
+        existingHandles = self._proxyHandlesByHash.setdefault(proxyHash, {})
+        for randomFloat, otherHandle in existingHandles.iteritems():
+            if otherHandle == handle:
+                break
+        else:
+            randomFloat = random.random() 
+            existingHandles[randomFloat] = handle
+        return proxyHash, randomFloat
+    
+    def _getProxyByHash(self, proxyKey):
+        proxyHash, randomFloat = proxyKey
+        handles = self._proxyHandlesByHash.get(proxyHash)
+        if handles is None:
+            return None
+        handle = handles.get(randomFloat)
+        if handle is None:
+            return None
+        if handle.isAlive():
+            return handle.object()
+        # if the handle isn't alive, remove it from the dict...
+        del handles[randomFloat]
+        return None
+        
+    def _delProxy(self, proxyMObj):
+        proxyHash = OpenMaya.MObjectHandle(proxyMObj).hashCode()
+        handles = self._proxyHandlesByHash.get(proxyHash)
+        if handles is None:
+            return
+        # w/o the random float part of the key, need to iterate through
+        # hash collisions... collisions should be rare, so shouldn't be
+        # many
+        for randomFloat, handle in handles.iteritems():
+            if handle == proxyMObj:
+                del handles[randomFloat]
+                break
+        if not handles:
+            del self._proxyHandlesByHash[proxyHash]
 
     def finalize(self):
         toRemove = self._cbIds
-        for callbackIds in self._nodeCbIds.values():
-            toRemove.extend(callbackIds)
         OpenMaya.MMessage.removeCallbacks(toRemove)
         self._cbIds = []
-        self._nodeCbIds = {}
+        self._proxyHandlesByHash = {}
+        self._instances.pop(id(self), None)
 
     def _beforeNewCb(self, data):
         self._beforeNewCbCalled = True
@@ -163,33 +228,48 @@ class _StagesSubject(object):
         pass
 
     def _nodeAddedCb(self, node, clientData):
-        # stage is not initialized until filePath attribute is set
-        # FIXME: There may be other times that a new stage is loaded, so it
-        # would be better to hook this up to a callback within the AL plugin.
-        id1 = OpenMaya.MNodeMessage.addAttributeChangedCallback(
-                node,
-                self._onStageLoad,
-                node)
-        self._nodeCbIds[OpenMaya.MObjectHandle(node).hashCode()] = [id1]
+        mfnDag = OpenMaya.MFnDagNode(node)
+        proxyShapeName = mfnDag.partialPathName()
+        # need a python-serializeable way to lookup the proxyShape - the name
+        # (and the UUID) can change between node creation and when scene is
+        # finished loading 
+        proxyKey = self._addProxy(node)
+        print "adding _onStageLoad for %s" % proxyShapeName
+        pyCmd = textwrap.dedent("""\
+            import ufeScripts.usdSubject
+            self = ufeScripts.usdSubject._StagesSubject._get_instance({selfid!r})
+            self._onStageLoad({proxyKey!r})
+            """.format(selfid=id(self), proxyKey=proxyKey))
+        cmds.AL_usdmaya_Callback(pne=(
+            proxyShapeName,
+            "PostStageLoaded",
+            "ufescripts_usdSubject_PostStageLoaded",
+            1000000,
+            pyCmd))
 
     def _nodeRemovedCb(self, node, clientData):
-        name = OpenMaya.MFnDagNode(node).partialPathName()
-        self.removeProxyShape(name)
+        self.removeProxyShape(node)
         hash_ = OpenMaya.MObjectHandle(node).hashCode()
-        callbackIds = self._nodeCbIds.get(hash_, None)
-        if callbackIds:
-            OpenMaya.MMessage.removeCallbacks(callbackIds)
 
-    def _onStageLoad(self, msg, plug, otherPlug, node):
-        if plug != self.filePathPlug:
-            return
-
-        proxyShapeName = OpenMaya.MFnDagNode(node).partialPathName()
+    def _onStageLoad(self, proxyKey):
+        sel = OpenMaya.MSelectionList()
+        proxyShapeNode = self._getProxyByHash(proxyKey)
+        if proxyShapeNode is None:
+            logger.warning("Unable to find proxyShape by key {!r} - _onStageLoad callback aborting"
+                           .format(proxyKey))
+            return        
+        proxyShapeName = OpenMaya.MFnDagNode(proxyShapeNode).partialPathName()
         proxyShape = AL_USDMaya.ProxyShape.getByName(proxyShapeName)
+        if proxyShape is None:
+            logger.warning("No proxy shape {!r} found - _onStageLoad callback aborting"
+                           .format(proxyShapeUUID))
+            return        
 
         stage = proxyShape.getUsdStage()
         if not stage:
-            logger.warning('No stage found %s' % stage)
+            logger.warning('No stage found for proxy {!r} - _onStageLoad callback aborting'
+                           .format(proxyShapeName))
+            return
 
         # Observe stage changes, must keep a reference to listener.
         # FIXME: Need to fix so that we do not hold on to stage references if
@@ -200,7 +280,9 @@ class _StagesSubject(object):
             self._stageListeners[stage] = Tf.Notice.Register(
                     Usd.Notice.ObjectsChanged, self.stageChanged, stage)
 
-    def removeProxyShape(self, proxyShapeName):
+    def removeProxyShape(self, node):
+        self._delProxy(node)
+        proxyShapeName = OpenMaya.MFnDagNode(node).partialPathName()
         proxyShape = AL_USDMaya.ProxyShape.getByName(proxyShapeName)
         stage = proxyShape.getUsdStage()
 

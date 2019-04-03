@@ -268,6 +268,7 @@ MObject LayerManager::m_anonymous = MObject::kNullObj;
 //----------------------------------------------------------------------------------------------------------------------
 void* LayerManager::conditionalCreator()
 {
+  TF_DEBUG(ALUSDMAYA_LAYERS).Msg("LayerManager::conditionalCreator\n");
   // If we were called from findOrCreate, we don't need to call findNode, we already did
   MObject theManager = findNode();
   if (!theManager.isNull())
