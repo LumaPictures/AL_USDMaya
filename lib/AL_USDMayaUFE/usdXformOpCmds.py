@@ -33,6 +33,7 @@ import ufe
 
 import maya.api.OpenMaya as OpenMaya
 
+from pxr import Usd
 from pxr import UsdGeom
 from pxr import Gf
 from math import degrees, radians
@@ -132,32 +133,38 @@ def convertToXformMatrixOp(prim):
 #                       Translate Operations
 # ===========================================================================
 def translateOp(prim, path, x, y, z,):
-    ''' Relative translation of the given prim '''
+    ''' Absolute or relative translation of the given prim
+    
+    Returns (modifiedAttr, oldAttrValue, newAttrValue)'''
     try:
         primXform = UsdGeom.XformCommonAPI(prim)
-        if not primXform or not primXform.SetTranslate(Gf.Vec3d(x,y,z)):
+        if not primXform:
             # This could mean that we have an incompatible xformOp in the stack
             try:
                 primXform = convertToCompatibleCommonAPI(prim)
-                translation = primXform.GetXformVectors()[0]
-                translation[0] += x;
-                translation[1] += y;
-                translation[2] += z;                
-                if not primXform.SetTranslate(translation):
-                    raise Exception ("Unable to SetTranslate on the 2nd try.")
             except IncompatibleXformCommonOpOrder as e:
                 try:
                     transformOp = convertToXformMatrixOp(prim)
-                    xformMatrix = transformOp.Get()
-                    translation = xformMatrix.ExtractTranslation()
-                    translation[0] += x;
-                    translation[1] += y;
-                    translation[2] += z;
-                    xformMatrix.SetTranslateOnly(translation)
-                    transformOp.Set(xformMatrix)
+                    oldXformMatrix = transformOp.Get()
+                    newXformMatrix = type(oldXformMatrix)(oldXformMatrix)
+                    newTranslation = oldXformMatrix.ExtractTranslation()
+                    # no idea why, but it seems that when we have a single
+                    # matrix xform, the translation fed in is relative... (?)
+                    newTranslation[0] += x;
+                    newTranslation[1] += y;
+                    newTranslation[2] += z;
+                    newXformMatrix.SetTranslateOnly(newTranslation)
+                    transformOp.Set(newXformMatrix)
+                    return transformOp.GetAttr(), oldXformMatrix, newXformMatrix
                 except IncompatibleXformMatrixOpOrder as e:
                     raise Exception("xformOpOrder not a single matrix, or" 
                         " XformCommon compatible: %s" % (e,))
+        oldTranslation = primXform.GetXformVectors(Usd.TimeCode.Default())[0]
+        # if the prim is XformCommonAPI compatible, we seem to get absolute
+        # values... (?)
+        newTranslation = Gf.Vec3d(x, y, z)
+        primXform.SetTranslate(newTranslation)
+        return prim.GetAttribute('xformOp:translate'), oldTranslation, newTranslation
     except Exception as e:
         raise Exception("Failed to translate prim %s - %s" % (str(path), e))
 
@@ -170,16 +177,11 @@ class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
     def __init__(self, prim, ufePath, item):
         super(UsdTranslateUndoableCommand, self).__init__(item)
         self._prim = prim
-        self._noTranslateOp = False
         self._path = ufePath
-
-        # Prim does not have a translate attribute
-        if not self._prim.HasAttribute('xformOp:translate'):
-            self._noTranslateOp = True
-            translateOp(self._prim, self._path, 0,0,0)# Add an empty translate
-
-        self._xlateAttrib = self._prim.GetAttribute('xformOp:translate')
-        self._prevXlate = self._prim.GetAttribute('xformOp:translate').Get()
+        
+        self._xlateAttrib = None
+        self._prevXlate = None
+        self._newXlate = None
 
     def _perform(self):
         ''' No-op, Use translate to move the object '''
@@ -187,14 +189,19 @@ class UsdTranslateUndoableCommand(ufe.TranslateUndoableCommand):
 
     def undo(self):
         self._xlateAttrib.Set(self._prevXlate)
-        # Todo : We would want to remove the xformOp
         # (SD-06/07/2018) Haven't found a clean way to do it - would need to investigate
 
     def redo(self):
-        self._perform()
+        self._xlateAttrib.Set(self._newXlate)
 
     def translate(self, x, y, z):
-        translateOp(self._prim, self._path, x,y,z)
+        attrib, oldVal, self._newXlate = translateOp(self._prim, self._path, x,y,z)
+        # if dragging interactively, translate may be called multiple times for a
+        # single undo item - so we use the first "old" value returned, and the last
+        # "new" value
+        if self._prevXlate is None:
+            self._xlateAttrib = attrib
+            self._prevXlate = oldVal
         return True
 
 #===========================================================================
