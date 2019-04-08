@@ -234,7 +234,6 @@ class _StagesSubject(object):
         # (and the UUID) can change between node creation and when scene is
         # finished loading 
         proxyKey = self._addProxy(node)
-        print "adding _onStageLoad for %s" % proxyShapeName
         pyCmd = textwrap.dedent("""\
             import ufeScripts.usdSubject
             self = ufeScripts.usdSubject._StagesSubject._get_instance({selfid!r})
@@ -257,15 +256,18 @@ class _StagesSubject(object):
         if proxyShapeNode is None:
             logger.warning("Unable to find proxyShape by key {!r} - _onStageLoad callback aborting"
                            .format(proxyKey))
-            return        
+            return
         proxyShapeName = OpenMaya.MFnDagNode(proxyShapeNode).partialPathName()
         proxyShape = AL_USDMaya.ProxyShape.getByName(proxyShapeName)
         if proxyShape is None:
             logger.warning("No proxy shape {!r} found - _onStageLoad callback aborting"
                            .format(proxyShapeUUID))
-            return        
+            return
 
-        stage = proxyShape.getUsdStage()
+        # This callback is triggered by a stage load - so we need to make sure we don't trigger
+        # a stage load OURSELVES, or else we've be in a recursive loop - so use usdStage, NOT
+        # getUsdStage
+        stage = proxyShape.usdStage()
         if not stage:
             logger.warning('No stage found for proxy {!r} - _onStageLoad callback aborting'
                            .format(proxyShapeName))
@@ -284,14 +286,15 @@ class _StagesSubject(object):
         self._delProxy(node)
         proxyShapeName = OpenMaya.MFnDagNode(node).partialPathName()
         proxyShape = AL_USDMaya.ProxyShape.getByName(proxyShapeName)
-        stage = proxyShape.getUsdStage()
+        stage = proxyShape.usdStage()
 
-        listener = self._stageListeners.get(stage)
-        if listener:
-            listener.Revoke()
-            self._stageListeners.pop(stage)
+        if stage:
+            listener = self._stageListeners.get(stage)
+            if listener:
+                listener.Revoke()
+                self._stageListeners.pop(stage)
 
-        usdRunTime.stageCache.dropStage(stage)
+            usdRunTime.stageCache.dropStage(stage)
 
     def stageChanged(self, notice, stage):
         '''Call the stageChanged() methods on stage observers.
