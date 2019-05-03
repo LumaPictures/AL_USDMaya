@@ -14,18 +14,21 @@
 // limitations under the License.
 //
 
-#include "AL/usdmaya/utils/DgNodeHelper.h"
 #include "AL/usdmaya/utils/NurbsCurveUtils.h"
-#include "AL/usdmaya/utils/Utils.h"
 
 #include "AL/maya/utils/NodeHelper.h"
-
+#include "AL/usdmaya/utils/DgNodeHelper.h"
+#include "AL/usdmaya/utils/Utils.h"
 #include "AL/usd/utils/DiffCore.h"
 
 #include "maya/MDoubleArray.h"
+#include "maya/MFnDoubleArrayData.h"
 #include "maya/MFnNumericAttribute.h"
-#include "maya/MPointArray.h"
 #include "maya/MGlobal.h"
+#include "maya/MPlug.h"
+#include "maya/MPointArray.h"
+
+#include "pxr/usd/usdUtils/pipeline.h"
 
 namespace AL {
 namespace usdmaya {
@@ -239,6 +242,39 @@ bool createMayaCurves(MFnNurbsCurve& fnCurve, MObject& parent, const UsdGeomNurb
   fnCurve.setName(dagName);
 
   return true;
+}
+
+
+//----------------------------------------------------------------------------------------------------------------------
+void copyNurbsCurveBindPoseData(MFnNurbsCurve& fnCurve, UsdGeomNurbsCurves& usdCurves, UsdTimeCode time)
+{
+  UsdGeomPrimvar pRefPrimVarAttr = usdCurves.CreatePrimvar(
+          UsdUtilsGetPrefName(),
+          SdfValueTypeNames->Point3fArray,
+          UsdGeomTokens->vertex);
+
+  if(pRefPrimVarAttr)
+  {
+    MStatus status;
+    const uint32_t numVertices = fnCurve.numCVs();
+    VtArray<GfVec3f> pref(numVertices);
+    MPointArray points;
+    status = fnCurve.getCVs(points, MSpace::kObject);
+    if(status)
+    {
+      for(uint32_t i = 0; i < numVertices; ++i)
+      {
+        pref[i][0] = float(points[i].x);
+        pref[i][1] = float(points[i].y);
+        pref[i][2] = float(points[i].z);
+      }
+      pRefPrimVarAttr.Set(pref, time);
+    }
+    else
+    {
+      MGlobal::displayError(MString("Unable to access mesh vertices on nurbs curve: ") + fnCurve.fullPathName());
+    }
+  }
 }
 
 //----------------------------------------------------------------------------------------------------------------------

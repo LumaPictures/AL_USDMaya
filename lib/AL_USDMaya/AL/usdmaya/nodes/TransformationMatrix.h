@@ -15,14 +15,12 @@
 //
 #pragma once
 
-#include "../Api.h"
-
+#include "AL/usdmaya/Api.h"
 #include "AL/usdmaya/TransformOperation.h"
 
 #include "maya/MPxTransformationMatrix.h"
 #include "maya/MPxTransform.h"
 
-#include "pxr/pxr.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
 
@@ -421,6 +419,9 @@ public:
   void pushToPrim();
 
 private:
+  /// \brief  sets the SRT values from a matrix
+  void setFromMatrix(MObject thisNode, const MMatrix& m);
+
   //  Translation methods:
   MStatus translateTo(const MVector &vector, MSpace::Space = MSpace::kTransform) override;
 

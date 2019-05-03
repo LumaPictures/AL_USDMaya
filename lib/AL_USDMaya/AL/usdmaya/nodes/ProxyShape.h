@@ -15,39 +15,35 @@
 //
 #pragma once
 
-#include "../Api.h"
+#include "AL/maya/event/MayaEventManager.h"
 
-#include <AL/usdmaya/ForwardDeclares.h>
-#include "AL/maya/utils/Api.h"
 #include "AL/maya/utils/MayaHelperMacros.h"
 #include "AL/maya/utils/NodeHelper.h"
-#include "AL/event/EventHandler.h"
-#include "AL/maya/event/MayaEventManager.h"
-#include <AL/usdmaya/SelectabilityDB.h>
-#include "AL/usdmaya/DrivenTransformsData.h"
+
+#include "AL/usdmaya/Api.h"
+
+#include "AL/usdmaya/ForwardDeclares.h"
 #include "AL/usdmaya/fileio/translators/TranslatorBase.h"
 #include "AL/usdmaya/fileio/translators/TranslatorContext.h"
-#include "AL/usdmaya/fileio/translators/TransformTranslator.h"
 #include "AL/usdmaya/nodes/proxy/PrimFilter.h"
-#include "maya/MPxSurfaceShape.h"
-#include "maya/MEventMessage.h"
-#include "maya/MNodeMessage.h"
-#include "maya/MPxDrawOverride.h"
-#include "maya/MEvaluationNode.h"
+#include "AL/usdmaya/SelectabilityDB.h"
+
 #include "maya/MDagModifier.h"
-#include "maya/MObjectArray.h"
+#include "maya/MDagPath.h"
+#include "maya/MGlobal.h"
+#include "maya/MNodeMessage.h"
+#include "maya/MPxSurfaceShape.h"
 #include "maya/MSelectionList.h"
-#include "pxr/pxr.h"
-#include "pxr/usd/usd/prim.h"
-#include "pxr/usd/usd/timeCode.h"
-#include "pxr/usd/sdf/path.h"
-#include "pxr/base/tf/weakBase.h"
-#include "pxr/usd/usd/notice.h"
+
+#if MAYA_API_VERSION < 201800
+#include "maya/MViewport2Renderer.h"
+#endif
+
 #include "pxr/usd/sdf/notice.h"
+#include "pxr/usd/usd/notice.h"
+#include "pxr/usd/usd/prim.h"
+#include "pxr/usd/usd/stage.h"
 #include "pxr/usdImaging/usdImagingGL/renderParams.h"
-#include <stack>
-#include <functional>
-#include "AL/usd/utils/ForwardDeclares.h"
 
 #if defined(WANT_UFE_BUILD)
 #include "ufe/ufe.h"
@@ -344,9 +340,6 @@ public:
   /// Open the stage unloaded.
   AL_DECL_ATTRIBUTE(unloaded);
 
-  /// an array of MPxData for the driven transforms
-  AL_DECL_ATTRIBUTE(inDrivenTransformsData);
-
   /// ambient display colour
   AL_DECL_ATTRIBUTE(ambient);
 
@@ -496,7 +489,8 @@ public:
       MDagModifier& modifier,
       TransformReason reason,
       MDGModifier* modifier2 = 0,
-      uint32_t* createCount = 0);
+      uint32_t* createCount = 0,
+      bool pushToPrim = true);
 
   /// \brief  Will construct AL_usdmaya_Transform nodes for all of the prims from the specified usdPrim and down.
   /// \param  usdPrim the root for the transforms to be created
@@ -696,14 +690,10 @@ public:
   /// \name   UsdImaging
   //--------------------------------------------------------------------------------------------------------------------
 
-  /// \brief  constructs the USD imaging engine for this shape
+  /// \brief  returns and optionally constructs the usd imaging engine for this proxy shape
+  /// \return the imagine engine instance for this shape (shared between draw override and shape ui)
   AL_USDMAYA_PUBLIC
-  void constructGLImagingEngine();
-
-  /// \brief  returns the usd imaging engine for this proxy shape
-  /// \return the imagine engin instance for this shape (shared between draw override and shape ui)
-  inline Engine* engine() const
-    { return m_engine; }
+  Engine* engine(bool construct=true);
 
   //--------------------------------------------------------------------------------------------------------------------
   /// \name   Miscellaneous
@@ -887,6 +877,11 @@ public:
     { m_boundingBoxCache.clear(); }
 
 private:
+  /// \brief  constructs the USD imaging engine for this shape
+  void constructGLImagingEngine();
+
+  /// \brief destroys the USD imaging engine for this shape
+  void destroyGLImagingEngine();
 
   static void onSelectionChanged(void* ptr);
   bool removeAllSelectedNodes(SelectionUndoHelper& helper);
@@ -904,7 +899,8 @@ private:
       TransformReason reason,
       MDGModifier* modifier2 = 0,
       uint32_t* createCount = 0,
-      MString* newPath = 0);
+      MString* newPath = 0,
+      bool pushToPrim = true);
 
   void removeUsdTransformChain_internal(
       const UsdPrim& usdPrim,
@@ -920,14 +916,16 @@ private:
       TransformReason reason,
       MDGModifier* modifier2,
       uint32_t* createCount,
-      MString* newPath = 0);
+      MString* newPath = 0,
+      bool pushToPrim = true);
 
   void makeUsdTransformsInternal(
       const UsdPrim& usdPrim,
       const MObject& parentXForm,
       MDagModifier& modifier,
       TransformReason reason,
-      MDGModifier* modifier2);
+      MDGModifier* modifier2,
+      bool pushToPrim = true);
 
   void removeUsdTransformsInternal(
       const UsdPrim& usdPrim,
@@ -937,8 +935,8 @@ private:
   struct TransformReference
   {
     TransformReference(const MObject& node, const TransformReason reason);
-    TransformReference(MObject mayaNode, uint32_t r, uint32_t s, uint32_t rc);
-    MObject node() const { return m_node.object(); }
+    TransformReference(MObject mayaNode, Transform* node, uint32_t r, uint32_t s, uint32_t rc);
+    MObject node() const { return m_node; }
     Transform* transform() const;
 
     bool decRef(const TransformReason reason);
@@ -960,7 +958,8 @@ private:
     void prepSelect()
       { m_selectedTemp = m_selected; }
   private:
-    MObjectHandle m_node;
+    MObject m_node;
+    Transform* m_transform;
     // ref counting values
     struct
     {
@@ -1016,7 +1015,6 @@ private:
   MStatus computeInStageDataCached(const MPlug& plug, MDataBlock& dataBlock);
   MStatus computeOutStageData(const MPlug& plug, MDataBlock& dataBlock);
   MStatus computeOutputTime(const MPlug& plug, MDataBlock& dataBlock, MTime&);
-  MStatus computeDrivenAttributes(const MPlug& plug, MDataBlock& dataBlock, const MTime&);
 
   //--------------------------------------------------------------------------------------------------------------------
   /// \name   Utils
@@ -1035,20 +1033,20 @@ private:
   void variantSelectionListener(SdfNotice::LayersDidChange const& notice);
   void onEditTargetChanged(UsdNotice::StageEditTargetChanged const& notice, UsdStageWeakPtr const& sender);
   void trackEditTargetLayer(LayerManager* layerManager=nullptr);
-  static void onAttributeChanged(MNodeMessage::AttributeMessage, MPlug&, MPlug&, void*);
   void validateTransforms();
 
 
   TfToken getTypeForPath(const SdfPath& path) override
     { return m_context->getTypeForPath(path); }
 
-  bool getTypeInfo(TfToken type, bool& supportsUpdate, bool& requiresParent) override
+  bool getTypeInfo(TfToken type, bool& supportsUpdate, bool& requiresParent, bool& importableByDefault) override
     {
       auto translator = m_translatorManufacture.get(type);
       if(translator)
       {
         supportsUpdate = translator->supportsUpdate();
         requiresParent = translator->needsTransformParent();
+        importableByDefault = translator->importableByDefault();
       }
       return translator != 0;
     }
@@ -1092,9 +1090,9 @@ private:
 
   uint32_t m_engineRefCount = 0;
   bool m_compositionHasChanged = false;
-  bool m_drivenTransformsDirty = false;
   bool m_pleaseIgnoreSelection = false;
   bool m_hasChangedSelection = false;
+  bool m_filePathDirty = false;
   bool m_ignoringUpdates = false;
 };
 
