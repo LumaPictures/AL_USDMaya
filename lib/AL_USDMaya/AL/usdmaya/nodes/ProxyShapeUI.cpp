@@ -101,11 +101,6 @@ void ProxyShapeUI::getDrawRequests(const MDrawInfo& drawInfo, bool isObjectAndAc
   MDrawRequest request = drawInfo.getPrototype(*this);
 
   ProxyShape* shape = static_cast<ProxyShape*>(surfaceShape());
-  Engine* engine = shape->engine();
-  if(!engine)
-  {
-    shape->constructGLImagingEngine();
-  }
 
   // add the request to the queue
   requests.add(request);
