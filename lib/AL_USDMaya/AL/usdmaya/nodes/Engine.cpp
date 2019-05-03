@@ -75,7 +75,6 @@ bool Engine::TestIntersectionBatch(
       _intersectCollection,
       *_taskController,
       _engine,
-      _renderTags,
       outHits);
 }
 
@@ -91,10 +90,9 @@ bool Engine::TestIntersectionBatch(
   HdRprimCollection& intersectCollection,
   HdxTaskController& taskController,
   HdEngine& engine,
-  TfTokenVector& outRenderTags,
   HdxIntersector::HitVector& outHits)
 {
-  _UpdateHydraCollection(&intersectCollection, paths, params, &outRenderTags);
+  _UpdateHydraCollection(&intersectCollection, paths, params);
 
   HdxIntersector::Params qparams;
   qparams.viewMatrix = worldToLocalSpace * viewMatrix;
@@ -120,7 +118,7 @@ bool Engine::TestIntersectionBatch(
     default:
       qparams.cullStyle = HdCullStyleDontCare;
   }
-  qparams.renderTags = outRenderTags;
+  qparams.renderTags = intersectCollection.GetRenderTags();
   qparams.enableSceneMaterials = params.enableSceneMaterials;
 
   taskController.SetPickResolution(pickResolution);

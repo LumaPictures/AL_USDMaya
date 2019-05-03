@@ -52,7 +52,6 @@ public:
       HdRprimCollection& intersectCollection,
       HdxTaskController& taskController,
       HdEngine& engine,
-      TfTokenVector& outRenderTags,
       HdxIntersector::HitVector& outHits);
 
 };
