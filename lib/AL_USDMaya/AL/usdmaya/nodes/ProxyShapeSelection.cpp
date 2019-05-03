@@ -1357,6 +1357,10 @@ bool ProxyShape::findPickedPrimsDefault(
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d\n",
       nearestOnly);
 
+  if(!proxy.engine()) {
+    return false;
+  }
+
   HdxIntersector::HitVector allHits;
   if (!proxy.engine()->TestIntersectionBatch(
       viewMatrix,
