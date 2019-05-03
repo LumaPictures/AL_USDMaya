@@ -15,15 +15,8 @@
 //
 #pragma once
 
-#include "./Api.h"
+#include "AL/maya/utils/Api.h"
 
-#include "maya/MString.h"
-
-#include <map>
-#include <vector>
-#include <string>
-
-#include "AL/maya/utils/ForwardDeclares.h"
 #include "AL/maya/utils/PluginTranslatorOptions.h"
 
 namespace AL {
@@ -294,6 +287,11 @@ public:
   /// \param  frameName the name of the high level frame to add into the GUI
   AL_MAYA_UTILS_PUBLIC
   bool addFrame(const char* frameName);
+
+  /// \brief  remove frame layout and it's set of controls
+  /// \param  frameName the name of the high level frame to remove
+  AL_MAYA_UTILS_PUBLIC
+  bool removeFrame(const char* frameName);
 
   /// \name   Add Exporter Options
   /// \brief  Add custom export/import options using the following methods. There must be at least 1 frame layout

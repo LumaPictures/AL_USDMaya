@@ -16,14 +16,12 @@
 #include "AL/usdmaya/TypeIDs.h"
 #include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/nodes/Engine.h"
-#include "AL/usdmaya/nodes/RendererManager.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
+#include "AL/usdmaya/nodes/RendererManager.h"
 
 #include "pxr/usdImaging/usdImaging/version.h"
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 
-#include "maya/MGlobal.h"
-#include "maya/MFnDependencyNode.h"
 #include "maya/MItDependencyNodes.h"
 
 namespace {
@@ -224,7 +222,7 @@ void RendererManager::changeRendererPlugin(ProxyShape* proxy, bool creation)
 {
   TF_DEBUG(ALUSDMAYA_RENDERER).Msg("RendererManager::changeRendererPlugin\n");
   assert(proxy);
-  if (proxy->engine())
+  if (proxy->engine(false))
   {
     int rendererId = getRendererPluginIndex();
     if (rendererId >= 0)
