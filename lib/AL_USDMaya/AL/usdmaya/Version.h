@@ -22,7 +22,7 @@
 
 #define AL_USDMAYA_VERSION_MAJOR 0
 #define AL_USDMAYA_VERSION_MINOR 32
-#define AL_USDMAYA_VERSION_PATCH 5
+#define AL_USDMAYA_VERSION_PATCH 15
 
 #define AL_USDMAYA_VERSION_STR xstr(AL_USDMAYA_VERSION_MAJOR) "." \
                                xstr(AL_USDMAYA_VERSION_MINOR) "." \
@@ -31,7 +31,7 @@
 namespace AL {
 namespace usdmaya {
 
-inline std::string getVersion()
+inline const char* getVersion()
 {
     return AL_USDMAYA_VERSION_STR;
 }

@@ -17,14 +17,12 @@
 
 #include "../Api.h"
 
+#include "AL/maya/utils/MayaHelperMacros.h"
 #include "maya/MPxCommand.h"
 
-#include "pxr/pxr.h"
-#include "AL/usdmaya/utils/ForwardDeclares.h"
-#include "AL/maya/utils/Api.h"
-#include "AL/maya/utils/MayaHelperMacros.h"
-
-PXR_NAMESPACE_USING_DIRECTIVE
+#if MAYA_API_VERSION < 201800
+#include "maya/MArgDatabase.h"
+#endif
 
 namespace AL {
 namespace usdmaya {

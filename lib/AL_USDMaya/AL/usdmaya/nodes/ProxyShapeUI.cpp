@@ -19,19 +19,10 @@
 #include "AL/usdmaya/nodes/Engine.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
 #include "AL/usdmaya/nodes/ProxyShapeUI.h"
-#include "AL/usdmaya/nodes/ProxyDrawOverride.h"
 
-#include "maya/M3dView.h"
-#include "maya/MBoundingBox.h"
-#include "maya/MMaterial.h"
-#include "maya/MDagModifier.h"
-#include "maya/MDGModifier.h"
-#include "maya/MDrawRequest.h"
 #include "maya/MFnDagNode.h"
-#include "maya/MSelectionList.h"
-#include "maya/MPoint.h"
-#include "maya/MObjectArray.h"
-#include "maya/MPointArray.h"
+#include "maya/MMatrix.h"
+#include "maya/MTime.h"
 
 #if defined(WANT_UFE_BUILD)
 #include "AL/usdmaya/TypeIDs.h"
@@ -110,11 +101,6 @@ void ProxyShapeUI::getDrawRequests(const MDrawInfo& drawInfo, bool isObjectAndAc
   MDrawRequest request = drawInfo.getPrototype(*this);
 
   ProxyShape* shape = static_cast<ProxyShape*>(surfaceShape());
-  Engine* engine = shape->engine();
-  if(!engine)
-  {
-    shape->constructGLImagingEngine();
-  }
 
   // add the request to the queue
   requests.add(request);
@@ -342,6 +328,7 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
 
   auto* proxyShape = static_cast<ProxyShape*>(surfaceShape());
   auto engine = proxyShape->engine();
+  if (!engine) return false;
   proxyShape->m_pleaseIgnoreSelection = true;
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();

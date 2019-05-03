@@ -18,6 +18,7 @@
 #include "pxr/usd/usdGeom/xform.h"
 
 #include "maya/MDoubleArray.h"
+#include "maya/MFnDoubleArrayData.h"
 #include "maya/MFnNurbsCurve.h"
 #include "maya/MPointArray.h"
 #include "maya/MStatus.h"
@@ -95,7 +96,7 @@ MStatus NurbsCurve::import(const UsdPrim& prim, MObject& parent, MObject& create
   if (ctx)
   {
     ctx->addExcludedGeometry(prim.GetPath());
-    ctx->insertItem(prim, parent);
+    ctx->insertItem(prim, createdObj);
   }
   return MStatus::kSuccess;
 }
@@ -119,6 +120,12 @@ UsdPrim NurbsCurve::exportObject(UsdStageRefPtr stage, MDagPath dagPath, const S
     UsdPrim prim = nurbs.GetPrim();
     DgNodeTranslator::copyDynamicAttributes(dagPath.node(), prim);
   }
+
+  if(params.getBool(GeometryExportOptions::kMeshPointsAsPref))
+  {
+    AL::usdmaya::utils::copyNurbsCurveBindPoseData(fnCurve, nurbs, params.m_timeCode);
+  }
+
   return nurbs.GetPrim();
 }
 

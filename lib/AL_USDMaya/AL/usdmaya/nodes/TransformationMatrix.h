@@ -15,12 +15,11 @@
 //
 #pragma once
 
-#include "../Api.h"
+#include "AL/usdmaya/Api.h"
 
 #include "maya/MPxTransformationMatrix.h"
 #include "maya/MPxTransform.h"
 
-#include "pxr/pxr.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
 #include "usdMaya/xformStack.h"
@@ -469,6 +468,9 @@ private:
       const TfToken& opName,
       Flags newFlag,
       bool insertAtBeginning=false);
+
+  /// \brief  sets the SRT values from a matrix
+  void setFromMatrix(MObject thisNode, const MMatrix& m);
 
   //  Translation methods:
   MStatus translateTo(const MVector &vector, MSpace::Space = MSpace::kTransform) override;
