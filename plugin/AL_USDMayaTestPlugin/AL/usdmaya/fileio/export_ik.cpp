@@ -3,8 +3,6 @@
 
 #include "test_usdmaya.h"
 
-#include "AL/usdmaya/TransformOperation.h"
-
 #include "pxr/usd/usdGeom/xform.h"
 
 using AL::maya::test::buildTempPath;
@@ -78,7 +76,7 @@ TEST(export_ik, ikchain)
     for(auto op : ops)
     {
       auto attr = op.GetAttr();
-      if(AL::usdmaya::xformOpToEnum(op.GetBaseName()) == AL::usdmaya::kTranslate)
+      if(op.GetOpType() == UsdGeomXformOp::TypeTranslate)
       {
         EXPECT_EQ(0, attr.GetNumTimeSamples());
       }
@@ -99,7 +97,7 @@ TEST(export_ik, ikchain)
     for(auto op : ops)
     {
       auto attr = op.GetAttr();
-      if(AL::usdmaya::xformOpToEnum(op.GetBaseName()) == AL::usdmaya::kTranslate)
+      if(op.GetOpType() == UsdGeomXformOp::TypeTranslate)
       {
         EXPECT_EQ(0, attr.GetNumTimeSamples());
       }

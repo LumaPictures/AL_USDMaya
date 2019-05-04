@@ -46,18 +46,13 @@ MString mapUsdPrimToMayaNode(const UsdPrim& usdPrim,
                              const MDagPath* const proxyShapeNode = nullptr);
 
 //----------------------------------------------------------------------------------------------------------------------
-/// \brief  convert a 4x4 matrix to an SRT transformation. Assumes that there is no shearing.
-/// \param  value the 4x4 matrix to extract the TRS values from
-/// \param  S the returned scale value
-/// \param  R the returned euler rotation values
-/// \param  T the returned translation values
+/// \brief  convert a 4x4 matrix to a Maya MTransformationMatrix, for decomposition
+/// \param  value the input pixar 4x4 matrix
+/// \return the MTransformationMatrix, which can be queried for individual xform components
 /// \ingroup usdmaya
 //----------------------------------------------------------------------------------------------------------------------
 AL_USDMAYA_UTILS_PUBLIC
-void matrixToSRT(const GfMatrix4d& value,
-                 double S[3],
-                 MEulerRotation& R,
-                 double T[3]);
+MTransformationMatrix matrixToMTransformationMatrix(const GfMatrix4d& value);
 
 //----------------------------------------------------------------------------------------------------------------------
 /// \brief  a simple method to convert double vec4 array to float vec3 array

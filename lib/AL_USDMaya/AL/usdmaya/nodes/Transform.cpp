@@ -20,6 +20,8 @@
 #include "AL/usdmaya/nodes/Transform.h"
 #include "AL/usdmaya/nodes/TransformationMatrix.h"
 
+#include "pxr/usd/usdGeom/mesh.h"
+
 #include "maya/MBoundingBox.h"
 #include "maya/MGlobal.h"
 #include "maya/MTime.h"
@@ -285,6 +287,14 @@ void Transform::updateTransform(MDataBlock& dataBlock)
 }
 
 //----------------------------------------------------------------------------------------------------------------------
+void Transform::setPrim(const UsdPrim& prim)
+{
+  transform()->setPrimInternal(prim, this);
+  // Now make sure our own attributes are up-to-date
+  dirtyMatrix();
+}
+
+//----------------------------------------------------------------------------------------------------------------------
 MBoundingBox Transform::boundingBox() const
 {
   TF_DEBUG(ALUSDMAYA_EVALUATION_BBOX).Msg("Transform::boundingBox\n");
@@ -348,8 +358,6 @@ MStatus Transform::connectionBroken(const MPlug& plug, const MPlug& otherPlug, b
 //
 MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& handle, const MDGContext& context)
 {
-  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
-
   if (plug.isNull())
     return MS::kFailure;
 
@@ -358,6 +366,8 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
 
   if (plug.isChild() && plug.parent().isLocked())
     return MS::kSuccess;
+
+  TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Transform::validateAndSetValue %s\n", plug.name().asChar());
 
   // If the time values are changed, store the new values, and then update the transform
   if (plug == m_time || plug == m_timeOffset || plug == m_timeScalar)
@@ -446,11 +456,11 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
         primPath = SdfPath(path.asChar());
         usdPrim = data->stage->GetPrimAtPath(primPath);
       }
-      transform()->setPrim(usdPrim, this);
+      setPrim(usdPrim);
     }
     else
     {
-      transform()->setPrim(UsdPrim(), this);
+      setPrim(UsdPrim());
     }
     return MS::kSuccess;
   }
@@ -471,7 +481,7 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
         primPath = SdfPath(path.asChar());
         usdPrim = UsdPrim(data->stage->GetPrimAtPath(primPath));
       }
-      transform()->setPrim(usdPrim, this);
+      setPrim(usdPrim);
       if(usdPrim)
         updateTransform(dataBlock);
     }
@@ -482,7 +492,7 @@ MStatus Transform::validateAndSetValue(const MPlug& plug, const MDataHandle& han
         TF_DEBUG(ALUSDMAYA_EVALUATION).Msg("Could not set '%s' to '%s' - could not retrieve stage\n",
             plug.name().asChar(), path.asChar());
       }
-      transform()->setPrim(UsdPrim(), this);
+      setPrim(UsdPrim());
     }
     return MS::kSuccess;
   }

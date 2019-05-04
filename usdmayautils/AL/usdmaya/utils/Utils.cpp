@@ -29,47 +29,12 @@ namespace usdmaya {
 namespace utils {
 
 //----------------------------------------------------------------------------------------------------------------------
-void matrixToSRT(const GfMatrix4d& value, double S[3], MEulerRotation& R, double T[3])
+MTransformationMatrix matrixToMTransformationMatrix(const GfMatrix4d& value)
 {
-  double matrix[4][4];
-  value.Get(matrix);
-  T[0] = matrix[3][0];
-  T[1] = matrix[3][1];
-  T[2] = matrix[3][2];
-  MVector xAxis(matrix[0][0], matrix[0][1], matrix[0][2]);
-  MVector yAxis(matrix[1][0], matrix[1][1], matrix[1][2]);
-  MVector zAxis(matrix[2][0], matrix[2][1], matrix[2][2]);
-  double scaleX = xAxis.length();
-  double scaleY = yAxis.length();
-  double scaleZ = zAxis.length();
-  bool isNegated = ((xAxis ^ yAxis) * zAxis) < 0.0;
-  if(isNegated)
-  {
-    scaleZ = -scaleZ;
-  }
-  xAxis /= scaleX;
-  yAxis /= scaleY;
-  zAxis /= scaleZ;
-  S[0] = scaleX;
-  S[1] = scaleY;
-  S[2] = scaleZ;
-  matrix[0][0] = xAxis.x;
-  matrix[0][1] = xAxis.y;
-  matrix[0][2] = xAxis.z;
-  matrix[0][3] = 0;
-  matrix[1][0] = yAxis.x;
-  matrix[1][1] = yAxis.y;
-  matrix[1][2] = yAxis.z;
-  matrix[1][3] = 0;
-  matrix[2][0] = zAxis.x;
-  matrix[2][1] = zAxis.y;
-  matrix[2][2] = zAxis.z;
-  matrix[2][3] = 0;
-  matrix[3][0] = 0;
-  matrix[3][1] = 0;
-  matrix[3][2] = 0;
-  matrix[3][3] = 1.0;
-  R = MMatrix(matrix);
+  MMatrix mayaMatrix;
+  // maya matrices and pxr matrices share same ordering, so can copy direcly into MMatrix's storage
+  value.Get(mayaMatrix.matrix);
+  return MTransformationMatrix(mayaMatrix);
 }
 
 //----------------------------------------------------------------------------------------------------------------------

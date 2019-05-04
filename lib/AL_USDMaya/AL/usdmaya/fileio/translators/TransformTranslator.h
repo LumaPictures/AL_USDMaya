@@ -18,12 +18,12 @@
 #include "../../Api.h"
 
 #include <AL/usdmaya/ForwardDeclares.h>
-#include "AL/usdmaya/TransformOperation.h"
 #include "AL/usdmaya/fileio/translators/DagNodeTranslator.h"
 
 #include "pxr/usd/usd/attribute.h"
 #include "pxr/usd/usdGeom/xform.h"
 #include "pxr/usd/usdGeom/xformCommonAPI.h"
+#include "usdMaya/xformStack.h"
 
 #include <vector>
 
@@ -78,14 +78,16 @@ public:
   AL_USDMAYA_PUBLIC
   static void copyAttributeValue(const MPlug& attr, UsdAttribute& usdAttr, const UsdTimeCode& timeCode);
 
-  /// \brief  retrieve the corresponding maya attribute for the transform operation.
+  /// \brief  retrieve the corresponding maya attribute(s) for the transform operation.
   /// \param  operation the transform operation we want the maya attribute handle for
-  /// \param  attribute the returned attribute handle
+  /// \param  attributes the returned attribute handle(s) - some operations may map to more than one maya attribute, ie,
+  ///         a "pivot" op classification will map to both rotatePivot and scalePivot, which should both be set to the
+  ///         same value
   /// \param  conversionFactor a scaling that should be applied to the maya attributes to put them into the correct
   ///         units for USD
   /// \return true if the attribute is known to be animated, and the attribute/conversionFactor contain valid results
   AL_USDMAYA_PUBLIC
-  static bool getAnimationVariables(TransformOperation operation, MObject& attribute, double& conversionFactor);
+  static bool getAnimationVariables(const UsdMayaXformOpClassification& operation, MObjectArray& attributes, double& conversionFactor);
 
 private:
   static MStatus processMetaData(const UsdPrim& from, MObject& to, const ImporterParams& params);
