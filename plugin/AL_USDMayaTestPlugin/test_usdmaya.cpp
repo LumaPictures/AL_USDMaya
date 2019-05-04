@@ -104,4 +104,25 @@ AL::usdmaya::nodes::ProxyShape* SetupProxyShapeWithMultipleMeshes()
   return proxyShape;
 }
 
+AL::usdmaya::nodes::ProxyShape* SetupProxyShapeWithXformedMesh()
+{
+  MFileIO::newFile(true);
+  MFnDagNode fn;
+  MObject world = fn.create("transform", "world");
+  fn.create("transform", "subxform", world);
+  MGlobal::executeCommand("polyCube -name theCube");
+  MGlobal::executeCommand("parent theCube subxform");
+  MGlobal::executeCommand("setAttr world.translateY 3");
+  MGlobal::executeCommand("setAttr subxform.translateZ 4");
+  const MString scene = buildTempPath("AL_USDMayaTests_SceneWithXformedMesh.usda");
+  MString command;
+  command.format("file -force -typ \"AL usdmaya export\" -pr -ea \"^1s\"", scene.asChar());
+
+  MGlobal::executeCommand(command, true);
+
+  //clear scene then create ProxyShape
+  MFileIO::newFile(true);
+  AL::usdmaya::nodes::ProxyShape* proxyShape = CreateMayaProxyShape(scene.asChar());
+  return proxyShape;
+}
 
