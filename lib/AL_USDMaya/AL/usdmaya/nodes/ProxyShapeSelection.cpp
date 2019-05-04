@@ -391,7 +391,8 @@ MObject ProxyShape::makeUsdTransformChain_internal(
     TransformReason reason,
     MDGModifier* modifier2,
     uint32_t* createCount,
-    MString* resultingPath)
+    MString* resultingPath,
+    bool pushToPrim)
 {
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::makeUsdTransformChain_internal\n");
 
@@ -401,7 +402,7 @@ MObject ProxyShape::makeUsdTransformChain_internal(
   // makes the assumption that instancing isn't supported.
   MFnDagNode fn(thisMObject());
   const MObject parent = fn.parent(0);
-  auto ret = makeUsdTransformChain(usdPrim, outStageAttr, outTimeAttr, parent, modifier, reason, modifier2, createCount, resultingPath);
+  auto ret = makeUsdTransformChain(usdPrim, outStageAttr, outTimeAttr, parent, modifier, reason, modifier2, createCount, resultingPath, pushToPrim);
   return ret;
 }
 
@@ -411,7 +412,8 @@ MObject ProxyShape::makeUsdTransformChain(
     MDagModifier& modifier,
     TransformReason reason,
     MDGModifier* modifier2,
-    uint32_t* createCount)
+    uint32_t* createCount,
+    bool pushToPrim)
 {
   if(!usdPrim)
   {
@@ -430,7 +432,7 @@ MObject ProxyShape::makeUsdTransformChain(
   }
 
   TF_DEBUG(ALUSDMAYA_TRANSLATORS).Msg("ProxyShape::makeUsdTransformChain on %s\n", usdPrim.GetPath().GetText());
-  MObject newNode = makeUsdTransformChain_internal(usdPrim, modifier, reason, modifier2, createCount);
+  MObject newNode = makeUsdTransformChain_internal(usdPrim, modifier, reason, modifier2, createCount, 0, pushToPrim);
   insertTransformRefs( { std::pair<SdfPath, MObject>(usdPrim.GetPath(), newNode) }, reason);
   return newNode;
 }
@@ -445,7 +447,8 @@ MObject ProxyShape::makeUsdTransformChain(
     TransformReason reason,
     MDGModifier* modifier2,
     uint32_t* createCount,
-    MString* resultingPath)
+    MString* resultingPath,
+    bool pushToPrim)
 {
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::makeUsdTransformChain %s\n", usdPrim.GetPath().GetText());
 
@@ -527,7 +530,7 @@ MObject ProxyShape::makeUsdTransformChain(
   if(path.GetPathElementCount() > 1)
   {
     // if there is a parent to this node, continue building the chain.
-    parentPath = makeUsdTransformChain(usdPrim.GetParent(), outStage, outTime, parentXForm, modifier, reason, modifier2, createCount);
+    parentPath = makeUsdTransformChain(usdPrim.GetParent(), outStage, outTime, parentXForm, modifier, reason, modifier2, createCount, resultingPath, pushToPrim);
   }
 
   // if we've hit the top of the chain, make sure we get the correct parent
@@ -589,7 +592,7 @@ MObject ProxyShape::makeUsdTransformChain(
 
     if(modifier2)
     {
-      modifier2->newPlugValueBool(ptrNode->pushToPrimPlug(), true);
+      modifier2->newPlugValueBool(ptrNode->pushToPrimPlug(), pushToPrim);
     }
 
     if(!isTransform)
@@ -642,7 +645,7 @@ MObject ProxyShape::makeUsdTransforms(const UsdPrim& usdPrim, MDagModifier& modi
 }
 
 //----------------------------------------------------------------------------------------------------------------------
-void ProxyShape::makeUsdTransformsInternal(const UsdPrim& usdPrim, const MObject& parentNode, MDagModifier& modifier, TransformReason reason, MDGModifier* modifier2)
+void ProxyShape::makeUsdTransformsInternal(const UsdPrim& usdPrim, const MObject& parentNode, MDagModifier& modifier, TransformReason reason, MDGModifier* modifier2, bool pushToPrim)
 {
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::makeUsdTransformsInternal\n");
   MFnDagNode fn;
@@ -669,7 +672,7 @@ void ProxyShape::makeUsdTransformsInternal(const UsdPrim& usdPrim, const MObject
 
       if(modifier2)
       {
-        modifier2->newPlugValueBool(ptrNode->pushToPrimPlug(), true);
+        modifier2->newPlugValueBool(ptrNode->pushToPrimPlug(), pushToPrim);
       }
 
       // set the primitive path
@@ -1087,6 +1090,8 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
       if(keepPrims.empty() && insertPrims.empty())
       {
         m_pleaseIgnoreSelection = false;
+        triggerEvent("PreSelectionChanged");
+        triggerEvent("PostSelectionChanged");
         triggerEvent("SelectionEnded");
         return false;
       }
@@ -1218,6 +1223,8 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
       if(prims.empty())
       {
         m_pleaseIgnoreSelection = false;
+        triggerEvent("PreSelectionChanged");
+        triggerEvent("PostSelectionChanged");
         triggerEvent("SelectionEnded");
         return false;
       }
@@ -1276,6 +1283,8 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
       if(removePrims.empty() && insertPrims.empty())
       {
         m_pleaseIgnoreSelection = false;
+        triggerEvent("PreSelectionChanged");
+        triggerEvent("PostSelectionChanged");
         triggerEvent("SelectionEnded");
         return false;
       }
@@ -1322,14 +1331,12 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
     break;
   }
 
+  triggerEvent("PreSelectionChanged");
   if(newlySelectedPaths.length())
   {
-    triggerEvent("PreSelectionChanged");
-
     MPxCommand::setResult(newlySelectedPaths);
-
-    triggerEvent("PostSelectionChanged");
   }
+  triggerEvent("PostSelectionChanged");
 
   m_pleaseIgnoreSelection = false;
   triggerEvent("SelectionEnded");
@@ -1349,6 +1356,10 @@ bool ProxyShape::findPickedPrimsDefault(
 {
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d\n",
       nearestOnly);
+
+  if(!proxy.engine()) {
+    return false;
+  }
 
   HdxIntersector::HitVector allHits;
   if (!proxy.engine()->TestIntersectionBatch(

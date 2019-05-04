@@ -15,7 +15,6 @@
 //
 
 #include "AL/maya/utils/MayaHelperMacros.h"
-
 #include "AL/usdmaya/TypeIDs.h"
 #include "AL/usdmaya/DebugCodes.h"
 #include "AL/usdmaya/nodes/ProxyShape.h"
@@ -522,6 +521,21 @@ bool TransformationMatrix::pushMatrix(const MMatrix& result, UsdGeomXformOp& op,
   }
 
   return true;
+}
+
+//----------------------------------------------------------------------------------------------------------------------
+void TransformationMatrix::setFromMatrix(MObject thisNode, const MMatrix& m)
+{
+  decomposeMatrix(m);
+  m_scaleFromUsd = scaleValue;
+  m_rotationFromUsd = rotationValue;
+  m_translationFromUsd = translationValue;
+  m_shearFromUsd = shearValue;
+  m_scalePivotFromUsd = scalePivotValue;
+  m_scalePivotTranslationFromUsd = scalePivotTranslationValue;
+  m_rotatePivotFromUsd = rotatePivotValue;
+  m_rotatePivotTranslationFromUsd = rotatePivotTranslationValue;
+  m_rotateOrientationFromUsd = rotateOrientationValue;
 }
 
 //----------------------------------------------------------------------------------------------------------------------
@@ -1089,16 +1103,7 @@ void TransformationMatrix::initialiseToPrim(bool readFromPrim, Transform* transf
         {
           MMatrix m;
           internal_readMatrix(m, m_xformops[0]);
-          decomposeMatrix(m);
-          m_scaleFromUsd = scaleValue;
-          m_rotationFromUsd = rotationValue;
-          m_translationFromUsd = translationValue;
-          m_shearFromUsd = shearValue;
-          m_scalePivotFromUsd = scalePivotValue;
-          m_scalePivotTranslationFromUsd = scalePivotTranslationValue;
-          m_rotatePivotFromUsd = rotatePivotValue;
-          m_rotatePivotTranslationFromUsd = rotatePivotTranslationValue;
-          m_rotateOrientationFromUsd = rotateOrientationValue;
+          setFromMatrix(transformNode->thisMObject(), m);
         }
       }
       else

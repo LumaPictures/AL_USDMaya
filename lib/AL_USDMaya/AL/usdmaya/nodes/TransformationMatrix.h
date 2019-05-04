@@ -469,6 +469,9 @@ private:
       Flags newFlag,
       bool insertAtBeginning=false);
 
+  /// \brief  sets the SRT values from a matrix
+  void setFromMatrix(MObject thisNode, const MMatrix& m);
+
   //  Translation methods:
   MStatus translateTo(const MVector &vector, MSpace::Space = MSpace::kTransform) override;
 
