@@ -15,6 +15,8 @@
 //
 #pragma once
 
+#include "pxr/imaging/hdx/intersector.h"
+#include "pxr/imaging/hdx/taskController.h"
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 #include "pxr/usdImaging/usdImagingGL/renderParams.h"
 
@@ -29,23 +31,29 @@ public:
   Engine(const SdfPath& rootPath,
          const SdfPathVector& excludedPaths);
 
-  struct HitInfo {
-    GfVec3d worldSpaceHitPoint;
-    int hitInstanceIndex;
-  };
-  typedef TfHashMap<SdfPath, HitInfo, SdfPath::Hash> HitBatch;
-
-  typedef std::function<SdfPath(const SdfPath&, const SdfPath&, const int)> PathTranslatorCallback;
-
   bool TestIntersectionBatch(
     const GfMatrix4d &viewMatrix,
     const GfMatrix4d &projectionMatrix,
     const GfMatrix4d &worldToLocalSpace,
     const SdfPathVector& paths,
-    UsdImagingGLRenderParams params,
+    const UsdImagingGLRenderParams& params,
+    const TfToken &intersectionMode,
     unsigned int pickResolution,
-    PathTranslatorCallback pathTranslator,
-    HitBatch *outHit);
+    HdxIntersector::HitVector& outHits);
+
+  static bool TestIntersectionBatch(
+      const GfMatrix4d &viewMatrix,
+      const GfMatrix4d &projectionMatrix,
+      const GfMatrix4d &worldToLocalSpace,
+      const SdfPathVector& paths,
+      const UsdImagingGLRenderParams& params,
+      const TfToken &intersectionMode,
+      unsigned int pickResolution,
+      HdRprimCollection& intersectCollection,
+      HdxTaskController& taskController,
+      HdEngine& engine,
+      HdxIntersector::HitVector& outHits);
+
 };
 
 }
