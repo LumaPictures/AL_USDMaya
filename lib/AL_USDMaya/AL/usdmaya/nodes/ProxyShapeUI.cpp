@@ -301,7 +301,6 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   MDagPath selectPath = selectInfo.selectPath();
   MMatrix invMatrix = selectPath.inclusiveMatrixInverse();
 
-  UsdImagingGLRenderParams params;
   MMatrix viewMatrix, projectionMatrix;
   GfMatrix4d worldToLocalSpace(invMatrix.matrix);
 
@@ -313,6 +312,10 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
 
   auto* proxyShape = static_cast<ProxyShape*>(surfaceShape());
   proxyShape->m_pleaseIgnoreSelection = true;
+
+  UsdImagingGLRenderParams params;
+  params.showGuides = proxyShape->displayGuidesPlug().asBool();
+  params.showRender = proxyShape->displayRenderGuidesPlug().asBool();
 
   UsdPrim root = proxyShape->getUsdStage()->GetPseudoRoot();
 
