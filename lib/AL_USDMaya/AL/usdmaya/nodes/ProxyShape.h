@@ -674,7 +674,8 @@ public:
 
   typedef std::function<bool(
     ProxyShape&,
-    const GfMatrix4d &,
+    const MDagPath&,
+    const GfMatrix4d&,
     const GfMatrix4d&,
     const GfMatrix4d&,
     const SdfPathVector&,
@@ -706,6 +707,7 @@ public:
   /// \param outHit A output map from hit Usd SdfPaths (NOT rprim-paths) to world-space hit positions
   /// \return bool indicating whether any hits were found
   inline bool findPickedPrims(
+    const MDagPath& proxyDagPath,
     const GfMatrix4d& viewMatrix,
     const GfMatrix4d& projectionMatrix,
     const GfMatrix4d& worldToLocalSpace,
@@ -715,7 +717,7 @@ public:
     unsigned int pickResolution,
     HitBatch& outHit)
   {
-    return m_findPickedPrimsFunction(*this, viewMatrix, projectionMatrix, worldToLocalSpace, paths, params,
+    return m_findPickedPrimsFunction(*this, proxyDagPath, viewMatrix, projectionMatrix, worldToLocalSpace, paths, params,
         nearestOnly, pickResolution, outHit);
   }
 
@@ -1049,6 +1051,7 @@ private:
   /// Standard/default implementation for findPickedPrims
   static bool findPickedPrimsDefault(
     ProxyShape& proxy,
+    const MDagPath& proxyDagPath,
     const GfMatrix4d& viewMatrix,
     const GfMatrix4d& projectionMatrix,
     const GfMatrix4d& worldToLocalSpace,

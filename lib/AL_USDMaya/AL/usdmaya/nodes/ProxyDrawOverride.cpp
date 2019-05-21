@@ -564,6 +564,7 @@ bool ProxyDrawOverride::userSelect(
   if (resolution > 1024) { resolution = 1024; }
 
   bool hitSelected = proxyShape->findPickedPrims(
+          objPath,
           GfMatrix4d(worldViewMatrix.matrix),
           GfMatrix4d(projectionMatrix.matrix),
           worldToLocalSpace,
