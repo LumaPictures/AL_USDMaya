@@ -1345,6 +1345,7 @@ bool ProxyShape::doSelect(SelectionUndoHelper& helper, const SdfPathVector& orde
 
 bool ProxyShape::findPickedPrimsDefault(
     ProxyShape& proxy,
+    const MDagPath& proxyDagPath,
     const GfMatrix4d& viewMatrix,
     const GfMatrix4d& projectionMatrix,
     const GfMatrix4d& worldToLocalSpace,

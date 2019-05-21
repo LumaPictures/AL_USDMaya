@@ -326,6 +326,7 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   if (resolution > 1024) { resolution = 1024; }
 
   bool hitSelected = proxyShape->findPickedPrims(
+          selectInfo.selectPath(),
           GfMatrix4d(viewMatrix.matrix),
           GfMatrix4d(projectionMatrix.matrix),
           worldToLocalSpace,
