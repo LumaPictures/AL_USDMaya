@@ -44,7 +44,8 @@ inline void addObjToSelectionList(MSelectionList& list, const MObject& object)
 };
 }
 
-ProxyShape::FindPickedPrimsFunction ProxyShape::m_findPickedPrimsFunction = ProxyShape::findPickedPrimsDefault;
+ProxyShape::FindPickedPrimsRunner ProxyShape::m_findPickedPrims(
+    ProxyShape::findPickedPrimsDefault, nullptr);
 
 //----------------------------------------------------------------------------------------------------------------------
 /// I have to handle the case where maya commands are issued (e.g. select -cl) that will remove our transform nodes
@@ -1353,8 +1354,12 @@ bool ProxyShape::findPickedPrimsDefault(
     const UsdImagingGLRenderParams& params,
     bool nearestOnly,
     unsigned int pickResolution,
-    HitBatch& outHit)
+    HitBatch& outHit,
+    void* userData)
 {
+  TF_UNUSED(proxyDagPath);
+  TF_UNUSED(userData);
+
   TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d\n",
       nearestOnly);
 
