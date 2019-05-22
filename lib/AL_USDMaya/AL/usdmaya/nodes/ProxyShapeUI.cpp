@@ -325,8 +325,24 @@ bool ProxyShapeUI::select(MSelectInfo& selectInfo, MSelectionList& selectionList
   if (resolution < 10) { resolution = 10; }
   if (resolution > 1024) { resolution = 1024; }
 
+  // selectInfo.selectPath seems to only give the transform... extend
+  // to the proxy shape
+  MDagPath proxyShapeDagPath = selectInfo.selectPath();
+  if (proxyShapeDagPath.node() != proxyShape->thisMObject()) {
+    if (!proxyShapeDagPath.push(proxyShape->thisMObject())) {
+      MString errMsg;
+      MDagPath aProxyDagPath;
+      MFnDagNode(proxyShape->thisMObject()).getPath(aProxyDagPath);
+      errMsg.format("ProxyShapeUI::userSelect called with dagPath ^1s, but no "
+          "instances of proxy shape ^2s were a child",
+          selectInfo.selectPath().fullPathName(),
+          aProxyDagPath.fullPathName());
+      MGlobal::displayError(errMsg);
+      return false;
+    }
+  }
   bool hitSelected = proxyShape->findPickedPrims(
-          selectInfo.selectPath(),
+          proxyShapeDagPath,
           GfMatrix4d(viewMatrix.matrix),
           GfMatrix4d(projectionMatrix.matrix),
           worldToLocalSpace,
