@@ -38,7 +38,7 @@ import maya.app.renderSetup.common.utils as utils
 
 from AL import usdmaya as AL_USDMaya
 
-from pxr import Sdf
+from pxr import Sdf, UsdGeom
 
 import re
 import sys
@@ -542,11 +542,9 @@ class UsdTransform3d(ufe.Transform3d):
 
     def translation(self):
         x, y, z = (0, 0, 0)
-        if self.prim().HasAttribute('xformOp:translate'):
-            # Initially, attribute can be created, but have no value.
-            v = self.prim().GetAttribute('xformOp:translate').Get()
-            if v is not None:
-                x, y, z = v
+        xformable = UsdGeom.Xformable(self.prim())
+        if xformable:
+            x, y, z = xformable.GetLocalTransformation()[3][:3]
         return ufe.Vector3d(x, y, z)
 
     # FIXME Python binding lifescope.  Memento objects are returned directly to

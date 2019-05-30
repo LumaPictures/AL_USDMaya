@@ -133,10 +133,11 @@ def convertToXformMatrixOp(prim):
 #                       Translate Operations
 # ===========================================================================
 def translateOp(prim, path, x, y, z,):
-    ''' Absolute or relative translation of the given prim
+    '''Absolute translation of the given prim
     
     Returns (modifiedAttr, oldAttrValue, newAttrValue)'''
     try:
+        newTranslation = Gf.Vec3d(x, y, z)
         primXform = UsdGeom.XformCommonAPI(prim)
         if not primXform:
             # This could mean that we have an incompatible xformOp in the stack
@@ -147,12 +148,6 @@ def translateOp(prim, path, x, y, z,):
                     transformOp = convertToXformMatrixOp(prim)
                     oldXformMatrix = transformOp.Get()
                     newXformMatrix = type(oldXformMatrix)(oldXformMatrix)
-                    newTranslation = oldXformMatrix.ExtractTranslation()
-                    # no idea why, but it seems that when we have a single
-                    # matrix xform, the translation fed in is relative... (?)
-                    newTranslation[0] += x;
-                    newTranslation[1] += y;
-                    newTranslation[2] += z;
                     newXformMatrix.SetTranslateOnly(newTranslation)
                     transformOp.Set(newXformMatrix)
                     return transformOp.GetAttr(), oldXformMatrix, newXformMatrix
@@ -162,7 +157,6 @@ def translateOp(prim, path, x, y, z,):
         oldTranslation = primXform.GetXformVectors(Usd.TimeCode.Default())[0]
         # if the prim is XformCommonAPI compatible, we seem to get absolute
         # values... (?)
-        newTranslation = Gf.Vec3d(x, y, z)
         primXform.SetTranslate(newTranslation)
         return prim.GetAttribute('xformOp:translate'), oldTranslation, newTranslation
     except Exception as e:
