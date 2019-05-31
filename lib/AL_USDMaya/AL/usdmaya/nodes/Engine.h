@@ -15,7 +15,7 @@
 //
 #pragma once
 
-#include "pxr/imaging/hdx/intersector.h"
+#include "pxr/imaging/hdx/pickTask.h"
 #include "pxr/imaging/hdx/taskController.h"
 #include "pxr/usdImaging/usdImagingGL/engine.h"
 #include "pxr/usdImaging/usdImagingGL/renderParams.h"
@@ -37,9 +37,9 @@ public:
     const GfMatrix4d &worldToLocalSpace,
     const SdfPathVector& paths,
     const UsdImagingGLRenderParams& params,
-    const TfToken &intersectionMode,
+    const TfToken &resolveMode,
     unsigned int pickResolution,
-    HdxIntersector::HitVector& outHits);
+    HdxPickHitVector& outHits);
 
   static bool TestIntersectionBatch(
       const GfMatrix4d &viewMatrix,
@@ -47,12 +47,12 @@ public:
       const GfMatrix4d &worldToLocalSpace,
       const SdfPathVector& paths,
       const UsdImagingGLRenderParams& params,
-      const TfToken &intersectionMode,
+      const TfToken &resolveMode,
       unsigned int pickResolution,
       HdRprimCollection& intersectCollection,
       HdxTaskController& taskController,
       HdEngine& engine,
-      HdxIntersector::HitVector& outHits);
+      HdxPickHitVector& outHits);
 
 };
 

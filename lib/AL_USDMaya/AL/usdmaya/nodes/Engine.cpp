@@ -39,6 +39,8 @@
 #include <vector>
 #include "AL/usdmaya/nodes/Engine.h"
 
+#include "pxr/usdImaging/usdImaging/delegate.h"
+
 namespace AL {
 namespace usdmaya {
 namespace nodes {
@@ -53,9 +55,9 @@ bool Engine::TestIntersectionBatch(
   const GfMatrix4d &worldToLocalSpace,
   const SdfPathVector& paths,
   const UsdImagingGLRenderParams& params,
-  const TfToken &intersectionMode,
+  const TfToken &resolveMode,
   unsigned int pickResolution,
-  HdxIntersector::HitVector& outHits)
+  HdxPickHitVector& outHits)
 {
   if (ARCH_UNLIKELY(_legacyImpl))
   {
@@ -63,6 +65,10 @@ bool Engine::TestIntersectionBatch(
   }
 
   TF_VERIFY(_delegate);
+  TF_VERIFY(_taskController);
+
+  // Forward scene materials enable option to delegate
+  _delegate->SetSceneMaterialsEnabled(params.enableSceneMaterials);
 
   return TestIntersectionBatch(
       viewMatrix,
@@ -70,7 +76,7 @@ bool Engine::TestIntersectionBatch(
       worldToLocalSpace,
       paths,
       params,
-      intersectionMode,
+      resolveMode,
       pickResolution,
       _intersectCollection,
       *_taskController,
@@ -85,45 +91,45 @@ bool Engine::TestIntersectionBatch(
   const GfMatrix4d &worldToLocalSpace,
   const SdfPathVector& paths,
   const UsdImagingGLRenderParams& params,
-  const TfToken &intersectionMode,
+  const TfToken &resolveMode,
   unsigned int pickResolution,
   HdRprimCollection& intersectCollection,
   HdxTaskController& taskController,
   HdEngine& engine,
-  HdxIntersector::HitVector& outHits)
+  HdxPickHitVector& outHits)
 {
+
   _UpdateHydraCollection(&intersectCollection, paths, params);
 
-  HdxIntersector::Params qparams;
-  qparams.viewMatrix = worldToLocalSpace * viewMatrix;
-  qparams.projectionMatrix = projectionMatrix;
-  qparams.alphaThreshold = params.alphaThreshold;
-  switch (params.cullStyle)
-  {
-    case UsdImagingGLCullStyle::CULL_STYLE_NO_OPINION:
-      qparams.cullStyle = HdCullStyleDontCare;
-      break;
-    case UsdImagingGLCullStyle::CULL_STYLE_NOTHING:
-      qparams.cullStyle = HdCullStyleNothing;
-      break;
-    case UsdImagingGLCullStyle::CULL_STYLE_BACK:
-      qparams.cullStyle = HdCullStyleBack;
-      break;
-    case UsdImagingGLCullStyle::CULL_STYLE_FRONT:
-      qparams.cullStyle = HdCullStyleFront;
-      break;
-    case UsdImagingGLCullStyle::CULL_STYLE_BACK_UNLESS_DOUBLE_SIDED:
-      qparams.cullStyle = HdCullStyleBackUnlessDoubleSided;
-      break;
-    default:
-      qparams.cullStyle = HdCullStyleDontCare;
+  TfTokenVector renderTags;
+  _ComputeRenderTags(params, &renderTags);
+  taskController.SetRenderTags(renderTags);
+
+  HdxRenderTaskParams hdParams = _MakeHydraUsdImagingGLRenderParams(params);
+  taskController.SetRenderParams(hdParams);
+
+  HdxPickHitVector allHits;
+  HdxPickTaskContextParams pickParams;
+  pickParams.resolution = GfVec2i(pickResolution, pickResolution);
+  if (resolveMode == HdxPickTokens->resolveNearestToCenter ||
+      resolveMode == HdxPickTokens->resolveNearestToCamera) {
+    pickParams.hitMode = HdxPickTokens->hitFirst;
+  } else {
+    pickParams.hitMode = HdxPickTokens->hitAll;
   }
-  qparams.renderTags = intersectCollection.GetRenderTags();
-  qparams.enableSceneMaterials = params.enableSceneMaterials;
+  pickParams.resolveMode = resolveMode;
+  pickParams.viewMatrix = worldToLocalSpace * viewMatrix;
+  pickParams.projectionMatrix = projectionMatrix;
+  pickParams.clipPlanes = params.clipPlanes;
+  pickParams.collection = intersectCollection;
+  pickParams.outHits = &allHits;
+  VtValue vtPickParams(pickParams);
 
-  taskController.SetPickResolution(pickResolution);
+  engine.SetTaskContextData(HdxPickTokens->pickParams, vtPickParams);
+  auto pickingTasks = taskController.GetPickingTasks();
+  engine.Execute(taskController.GetRenderIndex(), &pickingTasks);
 
-  return taskController.TestIntersection(&engine, intersectCollection, qparams, intersectionMode, &outHits);
+  return allHits.size() > 0;
 }
 
 }

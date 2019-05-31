@@ -1367,7 +1367,7 @@ bool ProxyShape::findPickedPrimsDefault(
     return false;
   }
 
-  HdxIntersector::HitVector allHits;
+  HdxPickHitVector allHits;
   if (!proxy.engine()->TestIntersectionBatch(
       viewMatrix,
       projectionMatrix,
@@ -1375,8 +1375,8 @@ bool ProxyShape::findPickedPrimsDefault(
       paths,
       params,
       nearestOnly ?
-          HdxIntersectionModeTokens->nearestToCamera :
-          HdxIntersectionModeTokens->unique,
+          HdxPickTokens->resolveNearestToCamera :
+          HdxPickTokens->resolveUnique,
       pickResolution,
       allHits)) {
     return false;
