@@ -1360,10 +1360,10 @@ bool ProxyShape::findPickedPrimsDefault(
   TF_UNUSED(proxyDagPath);
   TF_UNUSED(userData);
 
-  TF_DEBUG(ALUSDMAYA_SELECTION).Msg("ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d\n",
-      nearestOnly);
-
   if(!proxy.engine()) {
+    TF_DEBUG(ALUSDMAYA_SELECTION).Msg(
+        "ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d - no engine\n",
+        nearestOnly);
     return false;
   }
 
@@ -1379,6 +1379,9 @@ bool ProxyShape::findPickedPrimsDefault(
           HdxPickTokens->resolveUnique,
       pickResolution,
       allHits)) {
+    TF_DEBUG(ALUSDMAYA_SELECTION).Msg(
+        "ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d - found no hits\n",
+        nearestOnly);
     return false;
   }
 
@@ -1395,6 +1398,9 @@ bool ProxyShape::findPickedPrimsDefault(
     outHit[instancePath] = hit.worldSpaceHitPoint;
   }
 
+  TF_DEBUG(ALUSDMAYA_SELECTION).Msg(
+      "ProxyShapeSelection::findPickedPrimsDefault - nearestOnly? %d - found %lu hits\n",
+      nearestOnly, allHits.size());
   return true;
 }
 
