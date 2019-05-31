@@ -108,7 +108,6 @@ bool Engine::TestIntersectionBatch(
   HdxRenderTaskParams hdParams = _MakeHydraUsdImagingGLRenderParams(params);
   taskController.SetRenderParams(hdParams);
 
-  HdxPickHitVector allHits;
   HdxPickTaskContextParams pickParams;
   pickParams.resolution = GfVec2i(pickResolution, pickResolution);
   if (resolveMode == HdxPickTokens->resolveNearestToCenter ||
@@ -122,14 +121,14 @@ bool Engine::TestIntersectionBatch(
   pickParams.projectionMatrix = projectionMatrix;
   pickParams.clipPlanes = params.clipPlanes;
   pickParams.collection = intersectCollection;
-  pickParams.outHits = &allHits;
+  pickParams.outHits = &outHits;
   VtValue vtPickParams(pickParams);
 
   engine.SetTaskContextData(HdxPickTokens->pickParams, vtPickParams);
   auto pickingTasks = taskController.GetPickingTasks();
   engine.Execute(taskController.GetRenderIndex(), &pickingTasks);
 
-  return allHits.size() > 0;
+  return outHits.size() > 0;
 }
 
 }
