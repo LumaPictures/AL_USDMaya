@@ -541,12 +541,10 @@ MStatus TransformTranslator::copyAttributes(const UsdPrim& from, MObject to, con
   else
   {
     GfMatrix4d value;
-    const bool retValue = xformSchema.GetLocalTransformation(&value, &resetsXformStack, usdTime);
-    if(!retValue)
+    if(xformSchema.GetLocalTransformation(&value, &resetsXformStack, usdTime))
     {
-      return MS::kFailure;
+      MFnTransform(to).set(AL::usdmaya::utils::matrixToMTransformationMatrix(value));
     }
-    MFnTransform(to).set(AL::usdmaya::utils::matrixToMTransformationMatrix(value));
   }
 
   AL_MAYA_CHECK_ERROR2(setBool(to, m_inheritsTransform, !resetsXformStack), xformError);
