@@ -2142,7 +2142,7 @@ MBoundingBox ProxyShape::boundingBox() const
   // If we could cheaply determine whether a stage only has static geometry,
   // we could make this value a constant one for that case, avoiding the
   // memory overhead of a cache entry per frame
-  UsdTimeCode currTime = UsdTimeCode(inputTimeValue(dataBlock, m_outTime).as(MTime::uiUnit()));
+  UsdTimeCode currTime = UsdTimeCode(inputTimeValue(dataBlock, m_outTime).value());
 
   // RB: There must be a nicer way of doing this that avoids the map?
   // The time codes are likely to be ranged, so an ordered array + binary search would surely work?
